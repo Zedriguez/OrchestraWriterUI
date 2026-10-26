@@ -1,0 +1,2 @@
+# Append-only session logs from different branches should combine, not conflict.
+docs/handoffs/*.md merge=union

@@ -1,0 +1,485 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — Direction A "Concert program" (default)             */
+/* paper + ink + brass accent, dark stage framed inside the page.      */
+/* Direction B "One material" is applied with html[data-theme=stage]. */
+/* Never hard-code colors in components; use these tokens.             */
+/* ------------------------------------------------------------------ */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --paper: #f6f2ea;
+  --paper-2: #fbf9f4;
+  --paper-3: #eee8dc;
+  --paper-4: #e3dbcb;
+  --paper-glass: rgba(251, 249, 244, 0.72);
+
+  /* text */
+  --ink: #1d1a16;
+  --ink-2: #4b4740;
+  --ink-3: #847d72;
+  --ink-4: #b0a89b;
+
+  /* lines */
+  --line: rgba(29, 26, 22, 0.1);
+  --line-strong: rgba(29, 26, 22, 0.2);
+
+  /* brass accent */
+  --brass: #b5842c;
+  --brass-2: #d7ae55;
+  --brass-3: #8e6620;
+  --brass-soft: rgba(181, 132, 44, 0.12);
+  --brass-glow: rgba(215, 174, 85, 0.45);
+
+  /* the stage (always dark) */
+  --stage: #0b0e12;
+  --stage-2: #12161c;
+  --stage-3: #1a1f27;
+  --stage-line: rgba(255, 255, 255, 0.08);
+  --stage-text: #ece6da;
+  --stage-text-2: rgba(236, 230, 218, 0.62);
+  --stage-text-3: rgba(236, 230, 218, 0.38);
+
+  /* section hues (defaults; users can change any) */
+  --sec-strings: #e2b04c;
+  --sec-woodwinds: #5cba9a;
+  --sec-brass: #e8705e;
+  --sec-percussion: #9298e0;
+  --sec-other: #c98bc9;
+
+  /* confidence bands (sync) */
+  --conf-high: #4e9f6e;
+  --conf-mid: #d1a040;
+  --conf-low: #d2544b;
+
+  /* status */
+  --ok: #4e9f6e;
+  --warn: #d1a040;
+  --danger: #c94c44;
+  --info: #5b8fb9;
+
+  /* shape */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --radius-xl: 30px;
+
+  /* elevation */
+  --shadow-xs: 0 1px 2px rgba(29, 26, 22, 0.06);
+  --shadow-sm: 0 1px 2px rgba(29, 26, 22, 0.06), 0 2px 8px -4px rgba(29, 26, 22, 0.08);
+  --shadow: 0 10px 34px -16px rgba(29, 26, 22, 0.22), 0 2px 8px -4px rgba(29, 26, 22, 0.08);
+  --shadow-lg: 0 30px 70px -30px rgba(29, 26, 22, 0.35), 0 6px 18px -8px rgba(29, 26, 22, 0.12);
+  --shadow-stage: 0 40px 80px -36px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.35);
+  --focus: 0 0 0 3px rgba(181, 132, 44, 0.35);
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --dur-slow: 480ms;
+}
+
+/* Direction B — one dark material, amber accent, floating controls */
+:root[data-theme="stage"] {
+  color-scheme: dark;
+  --paper: #0d1014;
+  --paper-2: #14181e;
+  --paper-3: #1b2028;
+  --paper-4: #242a34;
+  --paper-glass: rgba(20, 24, 30, 0.72);
+  --ink: #ece6da;
+  --ink-2: #c9c2b4;
+  --ink-3: #8f897d;
+  --ink-4: #5e5a52;
+  --line: rgba(236, 230, 218, 0.1);
+  --line-strong: rgba(236, 230, 218, 0.2);
+  --brass: #d7ae55;
+  --brass-2: #ecc97a;
+  --brass-3: #b5842c;
+  --brass-soft: rgba(215, 174, 85, 0.14);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px -4px rgba(0, 0, 0, 0.5);
+  --shadow: 0 10px 34px -16px rgba(0, 0, 0, 0.7), 0 2px 8px -4px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 30px 70px -30px rgba(0, 0, 0, 0.8);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-paper-3: var(--paper-3);
+  --color-paper-4: var(--paper-4);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brass: var(--brass);
+  --color-brass-2: var(--brass-2);
+  --color-brass-3: var(--brass-3);
+  --color-brass-soft: var(--brass-soft);
+  --color-stage: var(--stage);
+  --color-stage-2: var(--stage-2);
+  --color-stage-3: var(--stage-3);
+  --color-stage-line: var(--stage-line);
+  --color-stage-text: var(--stage-text);
+  --color-stage-text-2: var(--stage-text-2);
+  --color-stage-text-3: var(--stage-text-3);
+  --color-sec-strings: var(--sec-strings);
+  --color-sec-woodwinds: var(--sec-woodwinds);
+  --color-sec-brass: var(--sec-brass);
+  --color-sec-percussion: var(--sec-percussion);
+  --color-sec-other: var(--sec-other);
+  --color-conf-high: var(--conf-high);
+  --color-conf-mid: var(--conf-mid);
+  --color-conf-low: var(--conf-low);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-lora), "Iowan Old Style", Georgia, serif;
+  --font-music: "Bravura Text", var(--font-lora), Georgia, serif;
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-stage: var(--shadow-stage);
+
+  --ease-out: var(--ease-out);
+  --ease-spring: var(--ease-spring);
+}
+
+/* Bravura Text (SIL OFL) for dynamic markings pp–fff. Falls back to Lora italic. */
+@font-face {
+  font-family: "Bravura Text";
+  src: url("https://cdn.jsdelivr.net/gh/steinbergmedia/bravura@master/redist/woff/BravuraText.woff2") format("woff2"),
+    url("https://cdn.jsdelivr.net/gh/steinbergmedia/bravura@master/redist/woff/BravuraText.woff") format("woff");
+  font-display: swap;
+  unicode-range: U+E000-F8FF;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                 */
+/* ------------------------------------------------------------------ */
+
+html {
+  background: var(--paper);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01", "tnum" 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transition: background-color var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
+}
+
+::selection {
+  background: rgba(215, 174, 85, 0.35);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: var(--radius-xs);
+}
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* Typography helpers                                                   */
+/* ------------------------------------------------------------------ */
+
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+
+.eyebrow-muted {
+  color: var(--ink-3);
+}
+
+.display {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+}
+
+.display em,
+.display i {
+  font-style: italic;
+  color: var(--ink-2);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.music {
+  font-family: var(--font-music);
+  font-style: italic;
+  font-weight: 600;
+  font-synthesis: none;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Surfaces                                                             */
+/* ------------------------------------------------------------------ */
+
+.card {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-flat {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.glass {
+  background: var(--paper-glass);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  border: 1px solid var(--line);
+}
+
+.stage-glass {
+  background: rgba(10, 13, 17, 0.55);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--stage-text);
+}
+
+.stage-frame {
+  position: relative;
+  background: var(--stage);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-stage);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.stage-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 0 80px rgba(0, 0, 0, 0.45);
+}
+
+/* film grain — tiny, cheap, gives the paper a printed feel */
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 160px 160px;
+  z-index: 1;
+}
+
+:root[data-theme="stage"] .grain::before {
+  mix-blend-mode: screen;
+  opacity: 0.06;
+}
+
+/* ------------------------------------------------------------------ */
+/* Aurora — the "magic" field used behind auth / empty states / hero    */
+/* ------------------------------------------------------------------ */
+
+.aurora {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  filter: blur(60px) saturate(1.15);
+  opacity: 0.9;
+}
+
+.aurora > span {
+  position: absolute;
+  border-radius: 9999px;
+  will-change: transform;
+  animation: aurora-drift 26s var(--ease-out) infinite alternate;
+}
+
+.aurora > span:nth-child(1) {
+  width: 46%;
+  height: 46%;
+  left: 8%;
+  top: 14%;
+  background: radial-gradient(closest-side, var(--sec-strings), transparent 70%);
+  animation-duration: 28s;
+}
+.aurora > span:nth-child(2) {
+  width: 40%;
+  height: 42%;
+  right: 6%;
+  top: 8%;
+  background: radial-gradient(closest-side, var(--sec-brass), transparent 70%);
+  animation-duration: 34s;
+  animation-delay: -8s;
+}
+.aurora > span:nth-child(3) {
+  width: 42%;
+  height: 40%;
+  left: 30%;
+  bottom: 4%;
+  background: radial-gradient(closest-side, var(--sec-woodwinds), transparent 70%);
+  animation-duration: 31s;
+  animation-delay: -16s;
+}
+.aurora > span:nth-child(4) {
+  width: 36%;
+  height: 36%;
+  right: 20%;
+  bottom: 18%;
+  background: radial-gradient(closest-side, var(--sec-percussion), transparent 70%);
+  animation-duration: 38s;
+  animation-delay: -4s;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, -4%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-5%, 5%, 0) scale(0.96);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+.fade-up {
+  animation: fade-up var(--dur-slow) var(--ease-out) both;
+}
+
+.fade-up-1 { animation-delay: 60ms; }
+.fade-up-2 { animation-delay: 120ms; }
+.fade-up-3 { animation-delay: 180ms; }
+.fade-up-4 { animation-delay: 240ms; }
+
+.shimmer {
+  background: linear-gradient(90deg, var(--paper-3) 0%, var(--paper-2) 50%, var(--paper-3) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* brass gradient text / bars */
+.brass-gradient {
+  background: linear-gradient(90deg, var(--brass-3), var(--brass-2) 60%, #f1dca0);
+}
+
+.brass-text {
+  background: linear-gradient(90deg, var(--brass-3), var(--brass) 50%, var(--brass-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* the dynamics ladder gradient: pp (dark) → fff (bright brass) */
+.ladder-gradient {
+  background: linear-gradient(90deg, #4a3d22 0%, #7a6230 30%, var(--brass) 60%, var(--brass-2) 82%, #f6e3ad 100%);
+}
+
+/* thin scrollbars inside panels */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* reduced motion: fades become instant switches */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:root[data-reduced-motion="true"] *,
+:root[data-reduced-motion="true"] *::before,
+:root[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
