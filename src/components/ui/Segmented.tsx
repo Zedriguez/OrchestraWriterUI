@@ -1,5 +1,6 @@
 "use client";
 
+import { ToggleGroup } from "radix-ui";
 import { cx } from "@/lib/utils/format";
 
 export interface SegmentedOption<T extends string> {
@@ -8,6 +9,11 @@ export interface SegmentedOption<T extends string> {
   disabled?: boolean;
 }
 
+/**
+ * Pick one of a few options (Radix ToggleGroup, single). Renders a radiogroup
+ * of radios; arrow keys move between options, Space/Enter selects. One option
+ * is always selected: clicking the active one does nothing.
+ */
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -26,41 +32,31 @@ export function Segmented<T extends string>({
   ariaLabel?: string;
 }) {
   return (
-    <div
-      role="radiogroup"
+    <ToggleGroup.Root
+      type="single"
+      orientation="horizontal"
+      value={value}
+      onValueChange={(next) => {
+        if (next) onChange(next as T);
+      }}
       aria-label={ariaLabel}
-      className={cx(
-        "inline-flex items-center rounded-full p-0.5",
-        onStage ? "bg-white/10" : "bg-paper-3",
-        className,
-      )}
+      className={cx("inline-flex items-center rounded-full p-0.5", onStage ? "bg-white/10" : "bg-paper-3", className)}
     >
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={o.disabled}
-            onClick={() => onChange(o.value)}
-            className={cx(
-              "rounded-full font-medium transition-colors disabled:opacity-40",
-              size === "sm" ? "h-7 px-3 text-[12px]" : "h-8 px-3.5 text-[13px]",
-              active
-                ? onStage
-                  ? "bg-white/15 text-stage-text shadow-sm"
-                  : "bg-paper-2 text-ink shadow-sm"
-                : onStage
-                  ? "text-stage-text-2 hover:text-stage-text"
-                  : "text-ink-3 hover:text-ink",
-            )}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
+      {options.map((o) => (
+        <ToggleGroup.Item
+          key={o.value}
+          value={o.value}
+          disabled={o.disabled}
+          className={cx(
+            "focus-round relative rounded-full font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+            // sm keeps its 28 px look; ::before grows the hit area to 32 px
+            size === "sm" ? "h-7 px-3 text-[12px] before:absolute before:inset-x-0 before:-inset-y-0.5" : "h-8 px-3.5 text-[13px]",
+            o.value === value ? (onStage ? "bg-white/15 text-stage-text shadow-sm" : "bg-paper-2 text-ink shadow-sm") : onStage ? "text-stage-text-2 hover:text-stage-text" : "text-ink-3 hover:text-ink",
+          )}
+        >
+          {o.label}
+        </ToggleGroup.Item>
+      ))}
+    </ToggleGroup.Root>
   );
 }

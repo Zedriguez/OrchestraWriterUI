@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Lora } from "next/font/google";
 import "./globals.css";
 import { ThemeSync } from "@/components/shell/ThemeSync";
+import { TooltipProvider } from "@/components/ui/Tooltip";
+import { Toaster } from "@/components/ui/Toaster";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -37,7 +39,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${inter.variable} ${lora.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         <ThemeSync />
-        {children}
+        <TooltipProvider>{children}</TooltipProvider>
+        <Toaster />
       </body>
     </html>
   );

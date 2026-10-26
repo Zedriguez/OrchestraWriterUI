@@ -2,6 +2,7 @@ import { BRIGHTNESS_LADDER, DYNAMICS, dynamicFromIndex, type Dynamic } from "@/s
 import type { InfoMap, Instrument, Note, StyleMarking } from "@/shared/info-map";
 import { sectionForInstrumentName, type Section } from "@/shared/sections";
 import { createRng, smoothNoise } from "@/lib/utils/rng";
+import { abbreviateInstrumentName } from "@/shared/score/names";
 
 export interface MockPartSpec {
   name: string;
@@ -105,7 +106,7 @@ export function buildMockInfoMap(spec: MockScoreSpec): InfoMap {
     return {
       id: `P${idx + 1}`,
       name: p.name,
-      shortName: p.shortName ?? abbreviate(p.name),
+      shortName: p.shortName ?? abbreviateInstrumentName(p.name),
       section,
       notes,
     };
@@ -121,84 +122,10 @@ export function buildMockInfoMap(spec: MockScoreSpec): InfoMap {
   };
 }
 
-export function abbreviate(name: string): string {
-  const map: Array<[RegExp, string]> = [
-    [/^Violin I$/i, "Vln. I"],
-    [/^Violin II$/i, "Vln. II"],
-    [/^Viola$/i, "Vla."],
-    [/^Cello$/i, "Vc."],
-    [/^Double Bass$|^Bass$|^Contrabass$/i, "Cb."],
-    [/^Flute/i, "Fl."],
-    [/^Piccolo/i, "Picc."],
-    [/^Oboe/i, "Ob."],
-    [/^Clarinet/i, "Cl."],
-    [/^Bassoon/i, "Bsn."],
-    [/^Contrabassoon/i, "Cbsn."],
-    [/^Horn/i, "Hn."],
-    [/^Trumpet/i, "Tpt."],
-    [/^Trombone/i, "Tbn."],
-    [/^Tuba/i, "Tba."],
-    [/^Timpani/i, "Timp."],
-    [/^Percussion/i, "Perc."],
-    [/^Harp/i, "Hp."],
-  ];
-  for (const [re, abbr] of map) {
-    if (re.test(name)) {
-      const suffix = name.match(/\s(I{1,3}|IV|V)$/)?.[1];
-      return suffix && !abbr.includes(suffix) ? `${abbr} ${suffix}` : abbr;
-    }
-  }
-  return name.slice(0, 5) + ".";
-}
+/** Moved to src/shared/score/names.ts; kept as an alias for older imports. */
+export const abbreviate = abbreviateInstrumentName;
 
-/** Consecutive notes merged into playing segments for fast lookup while rendering. */
-export interface ActivitySegment {
-  start: number;
-  end: number;
-  dynamic: Dynamic;
-}
-
-export function activitySegments(inst: Instrument, gap = 0.12): ActivitySegment[] {
-  const segs: ActivitySegment[] = [];
-  for (const n of inst.notes) {
-    const last = segs[segs.length - 1];
-    const end = n.time + n.duration;
-    if (last && n.time - last.end <= gap && last.dynamic === n.dynamics) {
-      last.end = Math.max(last.end, end);
-    } else {
-      segs.push({ start: n.time, end, dynamic: n.dynamics });
-    }
-  }
-  return segs;
-}
-
-/** Binary search for the active segment at time t. */
-export function segmentAt(segs: ActivitySegment[], t: number): ActivitySegment | null {
-  let lo = 0;
-  let hi = segs.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const s = segs[mid];
-    if (t < s.start) hi = mid - 1;
-    else if (t >= s.end) lo = mid + 1;
-    else return s;
-  }
-  return null;
-}
-
-/** Per-measure, per-part dynamic summary (for score strips and cards). */
-export function measureDynamic(inst: Instrument, measure: number): Dynamic | null {
-  // notes are sorted by time → measures ascend
-  let lo = 0;
-  let hi = inst.notes.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const n = inst.notes[mid];
-    if (n.measure < measure) lo = mid + 1;
-    else if (n.measure > measure) hi = mid - 1;
-    else return n.dynamics;
-  }
-  return null;
-}
+/** Moved to src/lib/score/segments.ts; re-exported so existing imports keep working. */
+export { activitySegments, segmentAt, measureDynamic, type ActivitySegment } from "@/lib/score/segments";
 
 export { BRIGHTNESS_LADDER, DYNAMICS };

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- No <divisions>: durations are read as quarter notes and the parser warns. -->
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Horn</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><time><beats>2</beats><beat-type>4</beat-type></time></attributes>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>

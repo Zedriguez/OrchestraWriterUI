@@ -1,12 +1,13 @@
 # Local stack for testing changes before they reach production. No AWS account needed.
-# Postgres 17 (same major as Aurora) + S3Mock (local S3) + optionally the server.
+# Postgres 17 (same major as Aurora) + S3Mock (local S3) + optionally the app image.
 #
-#   docker compose up -d                        Postgres + S3Mock only. Run `npm run dev` on your machine against them.
-#   docker compose --profile dev up             ...plus the server with hot reload, inside Docker.
-#   docker compose --profile prod up --build    ...plus the exact production image (Dockerfile), started the way App Runner starts it.
-#   docker compose --profile prod down -v       stop everything and wipe local data.
+#   docker compose up -d                      Postgres + S3Mock only. Then `npm run dev` on your machine;
+#                                             migrations and seeds run on boot (src/instrumentation.ts).
+#   docker compose --profile app up --build   ...plus the production image (Dockerfile: Next.js standalone),
+#                                             on http://localhost:3000, started the way App Runner starts it.
+#   docker compose --profile app down -v      stop everything and wipe local data.
 #
-# Full guide: docs/LOCAL_TESTING.md
+# Guide: docs/backend/LOCAL_TESTING.md. API: docs/backend/API.md.
 name: orchestrawriter
 
 x-app-env: &app-env
@@ -65,35 +66,17 @@ services:
       timeout: 3s
       retries: 20
 
-  # The production image, byte for byte what App Runner runs: migrate -> seed -> serve.
+  # The production image, byte for byte what App Runner runs: Next.js standalone
+  # server.js; migrations and seeds run from instrumentation on start.
   app:
-    profiles: ["prod"]
+    profiles: ["app"]
     build: .
     ports:
       - "3000:3000"
     environment:
       <<: *app-env
       NODE_ENV: production
-    depends_on:
-      db:
-        condition: service_healthy
-      s3:
-        condition: service_healthy
-
-  # Hot reload inside Docker: source mounted, tsx watch restarts on save.
-  dev:
-    profiles: ["dev"]
-    image: node:24-alpine
-    working_dir: /app
-    command: sh -c "npm ci && npm run db:migrate && npm run db:seed && npm run dev"
-    ports:
-      - "3000:3000"
-    environment:
-      <<: *app-env
-      NODE_ENV: development
-    volumes:
-      - .:/app
-      - devmodules:/app/node_modules   # keep Linux node_modules separate from your macOS ones
+      HOSTNAME: 0.0.0.0
     depends_on:
       db:
         condition: service_healthy
@@ -102,4 +85,3 @@ services:
 
 volumes:
   pgdata:
-  devmodules:

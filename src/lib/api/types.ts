@@ -51,8 +51,10 @@ export interface ApiClient {
   removeAudio(projectId: string): Promise<ProjectDto>;
   getProjectUrls(id: string): Promise<ProjectUrls>;
   fetchInfoMap(id: string): Promise<InfoMap>;
-  saveSync(id: string, sync: SyncState): Promise<void>;
-  saveDisplay(id: string, display: DisplaySettings): Promise<void>;
+  /** PUT the whole sync state; resolves with the project (updatedAt, derived status) */
+  saveSync(id: string, sync: SyncState): Promise<ProjectDto>;
+  /** PUT the whole display settings; resolves with the project (updatedAt) */
+  saveDisplay(id: string, display: DisplaySettings): Promise<ProjectDto>;
 
   // processing (browser-side jobs that persist through the API)
   startAlignment(projectId: string): Promise<Job<AlignResult>>;

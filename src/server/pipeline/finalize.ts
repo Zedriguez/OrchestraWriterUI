@@ -1,11 +1,11 @@
 // The only pipeline steps that touch the database. In AWS they log in as the
 // orchestra_worker Postgres role, which can see app tables and nothing in auth.
-import { pool } from "../db/client";
+import { getPool } from "../db/client";
 import type { NotatedState } from "./types";
 
 /** Record the score: one orchestral_sets row, one sheets row per part, job succeeded. Idempotent. */
 export async function finalize(state: NotatedState): Promise<{ jobId: number; setId: number; sheets: number }> {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query("BEGIN");
     const job = await client.query<{ status: string; set_id: number | null }>(
@@ -44,7 +44,7 @@ export async function finalize(state: NotatedState): Promise<{ jobId: number; se
 /** Called by the state machine's Catch, or by the inline runner, when any step fails. */
 export async function markFailed(input: { jobId: number; error?: unknown }): Promise<{ jobId: number }> {
   const text = describeError(input.error).slice(0, 2000);
-  await pool.query(
+  await getPool().query(
     `UPDATE app.transcription_jobs SET status = 'failed', error = $2, finished_at = now()
      WHERE id = $1 AND status <> 'succeeded'`, [input.jobId, text]);
   return { jobId: input.jobId };

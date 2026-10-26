@@ -199,6 +199,10 @@ body {
 :focus-visible {
   outline: none;
   box-shadow: var(--focus);
+}
+
+/* square-cornered controls get a small radius on the ring; pills keep their own */
+:where(:focus-visible):not([class*="rounded"]) {
   border-radius: var(--radius-xs);
 }
 
@@ -482,4 +486,52 @@ button,
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Primitives (Radix) — overlay entrances, focus shape, tooltip wraps   */
+/* Reduced motion is handled by the global rules above.                 */
+/* ------------------------------------------------------------------ */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* overlays, collapsible content */
+.fade-in {
+  animation: fade-in var(--dur) var(--ease-out) both;
+}
+
+/* tooltips and menus; grows from the trigger side (Radix sets the origin) */
+.pop-in {
+  transform-origin: var(--radix-popper-transform-origin);
+  animation: pop-in var(--dur-fast) var(--ease-out) both;
+}
+
+/* The global :focus-visible rule squares corners to --radius-xs; pills and
+   round thumbs keep their shape with this class. */
+.focus-round:focus-visible {
+  border-radius: 9999px;
+}
+
+/* Tooltip wrapper around a disabled control: the disabled element swallows
+   pointer events in some browsers, so let the wrapper receive them. */
+.tooltip-wrap > :disabled {
+  pointer-events: none;
 }

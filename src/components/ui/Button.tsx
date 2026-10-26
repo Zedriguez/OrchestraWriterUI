@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type MouseEvent, type ReactNode, type Ref } from "react";
 import Link from "next/link";
 import { cx } from "@/lib/utils/format";
 
@@ -8,7 +8,7 @@ export type ButtonVariant = "primary" | "brass" | "secondary" | "ghost" | "outli
 export type ButtonSize = "sm" | "md" | "lg" | "icon" | "icon-sm";
 
 const base =
-  "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap select-none transition-[background-color,color,box-shadow,transform,opacity] duration-150 ease-out disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.985]";
+  "focus-round inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap select-none transition-[background-color,color,box-shadow,transform,opacity] duration-150 ease-out disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.985]";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-ink text-paper hover:bg-ink-2 shadow-sm",
@@ -50,8 +50,26 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     </>
   );
   if (href) {
+    // Forward the ref and the remaining props so a link-button works as a
+    // Radix `asChild` trigger (Tooltip, Menu) and keeps aria-label/title.
+    const inactive = disabled || loading;
+    const anchorProps = rest as AnchorHTMLAttributes<HTMLAnchorElement>;
     return (
-      <Link href={href} className={cls} aria-disabled={disabled || loading}>
+      <Link
+        {...anchorProps}
+        ref={ref as unknown as Ref<HTMLAnchorElement>}
+        href={href}
+        className={cx(cls, inactive && "cursor-not-allowed opacity-45")}
+        aria-disabled={inactive || undefined}
+        tabIndex={inactive ? -1 : anchorProps.tabIndex}
+        onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+          if (inactive) {
+            e.preventDefault();
+            return;
+          }
+          anchorProps.onClick?.(e);
+        }}
+      >
         {content}
       </Link>
     );

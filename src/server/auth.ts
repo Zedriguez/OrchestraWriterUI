@@ -1,22 +1,24 @@
 // Better Auth instance. It owns the users/sessions/accounts/verifications tables
 // and serves every /api/auth/* endpoint (sign-up, sign-in, Google OAuth, sign-out,
 // get-session). Sessions are HttpOnly cookies; the browser sends them automatically.
+// Cookie: `better-auth.session_token` (`__Secure-better-auth.session_token` when
+// BETTER_AUTH_URL is https).
 import { betterAuth } from "better-auth";
 import { env } from "./config/env";
-import { pool } from "./db/client";
+import { getPool } from "./db/client";
 
 const google = env.auth.google;
 const timestamps = { createdAt: "created_at", updatedAt: "updated_at" } as const;
 
 export const auth = betterAuth({
-  appName: "OrchestraWriter",
+  appName: "Orchestra Visualizer",
   baseURL: env.auth.url,
   secret: env.auth.secret,
   trustedOrigins: [env.auth.url, ...env.corsOrigins],
 
-  // Our existing pg pool (IAM tokens on Aurora, password locally). Better Auth
+  // The process-wide pg pool (IAM tokens on Aurora, password locally). Better Auth
   // wraps it in Kysely and issues plain SQL against the tables below.
-  database: pool,
+  database: getPool(),
 
   emailAndPassword: {
     enabled: true,

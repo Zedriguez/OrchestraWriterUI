@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!-- divisions change between measures (1 → 4) and in the middle of measure 3 (4 → 2). No tempo: 120 by default. -->
+<score-partwise version="4.0">
+  <work><work-title>Divisions Change</work-title></work>
+  <part-list>
+    <score-part id="P1"><part-name>Flute</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>2</beats><beat-type>4</beat-type></time></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <attributes><divisions>4</divisions></attributes>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>A</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type></note>
+      <attributes><divisions>2</divisions></attributes>
+      <note><pitch><step>B</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>

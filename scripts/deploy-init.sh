@@ -308,7 +308,8 @@ PIPELINE_ENV=""
         \"STATE_MACHINE_ARN\": \"$SM_ARN\""
 echo "pipeline: ${SM_ARN:-inline (no state machine yet)}"
 INSTANCE_CONFIG="{\"Cpu\":\"0.25 vCPU\",\"Memory\":\"0.5 GB\",\"InstanceRoleArn\":\"$TASK_ROLE_ARN\"}"
-HEALTH_CONFIG='{"Protocol":"HTTP","Path":"/health","Interval":10,"Timeout":5,"HealthyThreshold":1,"UnhealthyThreshold":5}'
+# The API (and its DB-free liveness route) lives under /api since the server moved into Next.js.
+HEALTH_CONFIG='{"Protocol":"HTTP","Path":"/api/health","Interval":10,"Timeout":5,"HealthyThreshold":1,"UnhealthyThreshold":5}'
 
 log "App Runner service $APP_NAME"
 ARN=$(service_arn)
@@ -348,7 +349,7 @@ ALLOWED_ORIGINS="http://localhost:3000,$URL" scripts/s3-init.sh
 log "Done"
 cat <<TXT
 Site:                 $URL
-Health:               $URL/health   and   $URL/health/db
+Health:               $URL/api/health   and   $URL/api/health/db
 Deploy:               push to main -> GitHub Actions builds the image -> App Runner rolls it out
 Logs:                 aws logs tail /aws/apprunner/$APP_NAME/$(basename "$ARN")/application --follow
 Google sign-in:       $([ "$GOOGLE_ENABLED" = yes ] && echo enabled || echo "disabled")

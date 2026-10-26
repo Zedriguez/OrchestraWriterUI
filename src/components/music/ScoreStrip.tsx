@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { InfoMap } from "@/shared/info-map";
 import { BRIGHTNESS_LADDER } from "@/shared/dynamics";
-import { measureDynamic } from "@/lib/mock/info-map";
+import { measureDynamic } from "@/lib/score/segments";
 import { cx } from "@/lib/utils/format";
 import { Dyn } from "./Dyn";
 import { Toggle } from "@/components/ui/Toggle";

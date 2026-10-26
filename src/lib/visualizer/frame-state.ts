@@ -1,6 +1,6 @@
 import { BRIGHTNESS_LADDER, type Dynamic } from "@/shared/dynamics";
 import type { InfoMap } from "@/shared/info-map";
-import { activitySegments, segmentAt, type ActivitySegment } from "@/lib/mock/info-map";
+import { activitySegments, segmentAt, type ActivitySegment } from "@/lib/score/segments";
 
 export interface PartFrame {
   id: string;

@@ -1,13 +1,15 @@
-// Audio file business logic: DB rows in audio_files + objects in S3.
+// /api/files: standalone recordings for the transcription pipeline (not project audio).
+// DB rows in audio_files + objects in S3.
 // Routes call these; nothing here knows about HTTP.
 import { query } from "../db/client";
+import { ForbiddenKeyError } from "../errors";
 import {
-  deleteAudio,
+  deleteObject,
   keyBelongsTo,
   newAudioKey,
   presignDownload,
   presignUpload,
-} from "../storage/audio";
+} from "../storage/keys";
 import type { AudioFileRow } from "../types/db";
 
 export type AudioFileDto = {
@@ -17,13 +19,6 @@ export type AudioFileDto = {
   audioLengthSeconds: number;
   createdAt: string;
 };
-
-export class ForbiddenKeyError extends Error {
-  constructor() {
-    super("That object key does not belong to you");
-    this.name = "ForbiddenKeyError";
-  }
-}
 
 function toDto(row: AudioFileRow): AudioFileDto {
   return {
@@ -88,7 +83,7 @@ export async function deleteFile(userId: number, fileId: number): Promise<boolea
   );
   if (!row) return false;
   try {
-    await deleteAudio(row.s3_key);
+    await deleteObject(row.s3_key);
   } catch (err) {
     // The row is gone; an orphaned object is a cleanup job, not a user-facing error.
     console.error(`Failed to delete S3 object ${row.s3_key}`, err);

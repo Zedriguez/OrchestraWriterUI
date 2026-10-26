@@ -1,126 +1,74 @@
-// Transcription jobs: create, start the pipeline, read status, sign sheet downloads.
-import { DescribeExecutionCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
-import { awsConfig } from "../config/aws";
-import { env } from "../config/env";
+// Server-side visualizer jobs (app.jobs). Today only parse-score runs here;
+// browser jobs (align, export) never touch this table. Polled via GET /api/jobs/:id.
+import type { JobDto } from "@/shared/api";
+import type { JobKind, JobStatus } from "@/shared/jobs";
+import type { PoolClient } from "pg";
 import { query } from "../db/client";
-import { markFailed } from "../pipeline/finalize";
-import { runInline } from "../pipeline/inline";
-import type { JobInput } from "../pipeline/types";
-import { presignDownload } from "../storage/audio";
+import { NotFoundError } from "../errors";
+import type { JobRow } from "../types/db";
 
-const sfn = new SFNClient({ region: awsConfig.region });
+const COLUMNS = "id, user_id, project_id, kind, status, progress, message, result, error, created_at, updated_at";
 
-export class NotFoundError extends Error {
-  constructor(what: string) { super(`${what} not found`); this.name = "NotFoundError"; }
-}
-
-type JobRow = {
-  id: number; audio_file_id: number | null; audio_name: string | null; status: string;
-  execution_arn: string | null; chunk_count: number | null; set_id: number | null; error: string | null;
-  created_at: Date; started_at: Date | null; finished_at: Date | null;
-};
-
-export type SheetDto = { id: number; name: string; instrument: string };
-export type JobDto = {
-  id: number; audioFileId: number | null; audioName: string | null;
-  status: "queued" | "running" | "succeeded" | "failed";
-  chunkCount: number | null; setId: number | null; error: string | null;
-  createdAt: string; startedAt: string | null; finishedAt: string | null;
-  sheets?: SheetDto[];
-};
-
-const SELECT_JOB = `
-  SELECT j.id, j.audio_file_id, a.name AS audio_name, j.status, j.execution_arn, j.chunk_count,
-         j.set_id, j.error, j.created_at, j.started_at, j.finished_at
-    FROM app.transcription_jobs j
-    LEFT JOIN app.audio_files a ON a.id = j.audio_file_id`;
-
-function toDto(r: JobRow): JobDto {
-  return {
-    id: r.id, audioFileId: r.audio_file_id, audioName: r.audio_name, status: r.status as JobDto["status"],
-    chunkCount: r.chunk_count, setId: r.set_id, error: r.error,
-    createdAt: r.created_at.toISOString(),
-    startedAt: r.started_at?.toISOString() ?? null,
-    finishedAt: r.finished_at?.toISOString() ?? null,
+export function jobToDto(row: JobRow): JobDto {
+  const dto: JobDto = {
+    id: String(row.id),
+    kind: row.kind as JobKind,
+    status: row.status,
+    progress: Math.max(0, Math.min(1, row.progress)),
+    message: row.message,
+    startedAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
   };
-}
-
-/** Create a job for one of the user's recordings and start the pipeline. */
-export async function createJob(userId: number, audioFileId: number): Promise<JobDto> {
-  const [audio] = await query<{ id: number; name: string; s3_key: string; audio_length_seconds: number }>(
-    "SELECT id, name, s3_key, audio_length_seconds FROM app.audio_files WHERE id = $1 AND user_id = $2",
-    [audioFileId, userId]);
-  if (!audio) throw new NotFoundError("Recording");
-
-  const [job] = await query<{ id: number }>(
-    "INSERT INTO app.transcription_jobs (user_id, audio_file_id) VALUES ($1, $2) RETURNING id", [userId, audioFileId]);
-  const input: JobInput = {
-    jobId: job!.id, userId, audioFileId,
-    audioKey: audio.s3_key, audioName: audio.name, durationSeconds: audio.audio_length_seconds,
-  };
-
-  if (env.pipeline.mode === "stepfunctions") {
-    if (!env.pipeline.stateMachineArn) throw new Error("STATE_MACHINE_ARN is not set");
-    try {
-      const out = await sfn.send(new StartExecutionCommand({
-        stateMachineArn: env.pipeline.stateMachineArn,
-        name: `job-${input.jobId}-${Date.now()}`,
-        input: JSON.stringify(input),
-      }));
-      await query("UPDATE app.transcription_jobs SET status = 'running', started_at = now(), execution_arn = $2 WHERE id = $1",
-        [input.jobId, out.executionArn]);
-    } catch (err) {
-      await markFailed({ jobId: input.jobId, error: err });
-      throw err;
-    }
-  } else {
-    await query("UPDATE app.transcription_jobs SET status = 'running', started_at = now() WHERE id = $1", [input.jobId]);
-    void runInline(input); // fire and forget; the job row records the outcome
-  }
-  return getJob(userId, input.jobId);
-}
-
-export async function listJobs(userId: number): Promise<JobDto[]> {
-  const rows = await query<JobRow>(`${SELECT_JOB} WHERE j.user_id = $1 ORDER BY j.created_at DESC, j.id DESC LIMIT 50`, [userId]);
-  return rows.map(toDto);
-}
-
-/** One job, with its sheets once it has succeeded. */
-export async function getJob(userId: number, jobId: number): Promise<JobDto> {
-  const [row] = await query<JobRow>(`${SELECT_JOB} WHERE j.id = $1 AND j.user_id = $2`, [jobId, userId]);
-  if (!row) throw new NotFoundError("Job");
-  await reconcile(row);
-  const dto = toDto(row);
-  if (row.set_id) {
-    dto.sheets = await query<SheetDto>(
-      `SELECT s.id, s.name, i.name AS instrument FROM app.sheets s JOIN app.instruments i ON i.id = s.instrument_id
-        WHERE s.set_id = $1 ORDER BY s.id`, [row.set_id]);
-  }
+  if (row.result !== null && row.result !== undefined) dto.result = row.result;
+  if (row.error) dto.error = row.error;
   return dto;
 }
 
-/**
- * Safety net: if an execution died in a way the state machine's Catch could not
- * record (aborted by hand, Step Functions-level timeout), mark the job failed.
- */
-async function reconcile(row: JobRow): Promise<void> {
-  if (row.status !== "running" || !row.execution_arn || env.pipeline.mode !== "stepfunctions") return;
-  try {
-    const ex = await sfn.send(new DescribeExecutionCommand({ executionArn: row.execution_arn }));
-    if (ex.status && ex.status !== "RUNNING" && ex.status !== "SUCCEEDED" && ex.status !== "PENDING_REDRIVE") {
-      await markFailed({ jobId: row.id, error: { Error: `Execution ${ex.status}`, Cause: ex.cause ?? ex.error } });
-      row.status = "failed";
-      row.error = `Execution ${ex.status}`;
-    }
-  } catch (err) {
-    console.warn(`could not describe execution for job ${row.id}`, err);
+/** Insert a job row; pass `db` to create it inside an open transaction. */
+export async function createJob(
+  userId: number,
+  input: { projectId: number | null; kind: JobKind; message: string; status?: JobStatus },
+  db?: PoolClient,
+): Promise<JobRow> {
+  const sql = `INSERT INTO app.jobs (user_id, project_id, kind, status, message)
+               VALUES ($1, $2, $3, $4, $5)
+               RETURNING ${COLUMNS}`;
+  const params = [userId, input.projectId, input.kind, input.status ?? "running", input.message];
+  const rows = db ? (await db.query<JobRow>(sql, params)).rows : await query<JobRow>(sql, params);
+  return rows[0]!;
+}
+
+/** Progress update from a running job. Never moves a finished job. */
+export async function updateJobProgress(jobId: number, progress: number, message: string): Promise<void> {
+  await query(
+    `UPDATE app.jobs SET progress = $2, message = $3, updated_at = now()
+      WHERE id = $1 AND status IN ('queued', 'running')`,
+    [jobId, Math.max(0, Math.min(1, progress)), message],
+  );
+}
+
+export async function finishJob(
+  jobId: number,
+  outcome: { status: "succeeded"; result: unknown; message?: string } | { status: "failed"; error: string; message?: string },
+): Promise<void> {
+  if (outcome.status === "succeeded") {
+    await query(
+      `UPDATE app.jobs SET status = 'succeeded', progress = 1, message = $2, result = $3::jsonb, error = NULL, updated_at = now()
+        WHERE id = $1`,
+      [jobId, outcome.message ?? "Done", JSON.stringify(outcome.result)],
+    );
+  } else {
+    await query(
+      `UPDATE app.jobs SET status = 'failed', message = $2, error = $3, updated_at = now()
+        WHERE id = $1`,
+      [jobId, outcome.message ?? "Failed", outcome.error.slice(0, 2000)],
+    );
   }
 }
 
-export async function getSheetDownloadUrl(userId: number, sheetId: number): Promise<string> {
-  const [row] = await query<{ s3_key: string }>(
-    `SELECT s.s3_key FROM app.sheets s JOIN app.orchestral_sets o ON o.id = s.set_id
-      WHERE s.id = $1 AND o.user_id = $2`, [sheetId, userId]);
-  if (!row) throw new NotFoundError("Sheet");
-  return presignDownload(row.s3_key);
+/** One job, only if it belongs to userId (404 otherwise). */
+export async function getJob(userId: number, jobId: number): Promise<JobDto> {
+  const [row] = await query<JobRow>(`SELECT ${COLUMNS} FROM app.jobs WHERE id = $1 AND user_id = $2`, [jobId, userId]);
+  if (!row) throw new NotFoundError("Job");
+  return jobToDto(row);
 }

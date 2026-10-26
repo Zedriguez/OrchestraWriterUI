@@ -72,7 +72,7 @@ export function Waveform({
         {bands?.map((b, i) => (
           <rect key={i} x={b.from * 100} y="0" width={(b.to - b.from) * 100} height="100" fill={b.color} opacity="0.18" />
         ))}
-        <g fill={onStage ? "rgba(236,230,218,0.22)" : "rgba(29,26,22,0.16)"}>
+        <g fill={onStage ? "var(--stage-text)" : "var(--ink)"} fillOpacity={onStage ? 0.22 : 0.16}>
           {bars.map((b, i) => (
             <rect key={i} x={b.x} y={(100 - b.h) / 2} width={b.w} height={b.h} rx="0.3" />
           ))}

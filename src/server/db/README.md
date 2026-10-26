@@ -1,11 +1,11 @@
 # server/db/
 
-`client.ts` exports one `pg` pool and a `query()` helper. On Aurora the pool has no password: every new connection asks the AWS SDK for a 15-minute IAM token. Set `DB_PASSWORD` and `DB_SSL=false` only for a local Postgres.
+- `client.ts`: `getPool()` returns one `pg` pool per process, created lazily and kept on `globalThis` (Next.js dev reloads modules, and instrumentation and route handlers are separate bundles). `query()` retries twice when the connection itself failed (Aurora resuming); `withTransaction()`; `isConnectionError()`. On Aurora the pool has no password: every new connection gets a 15-minute IAM token. Locally `DB_PASSWORD` is set and TLS is off (the defaults in `config/env.ts`).
+- `migrate.ts`: `runMigrations()` applies `sql/schema/*.sql` then `sql/migrations/*.sql` in filename order, each once, each in its own transaction, under an advisory lock. Applied names are in `public.schema_migrations`.
+- `seed.ts`: `runSeeds()` runs `sql/seeds/*.sql` every time; write seeds with `ON CONFLICT DO NOTHING`.
+- `readiness.ts`: `prepareDatabase()` (migrate + seed once; logs `Database unreachable at host:port. Run \`docker compose up -d\`.` instead of crashing) and `ensureDatabase()` (API middleware; 503 while unreachable, retried every 5 s).
+- `sql-root.ts`: finds the SQL folder next to this module, or under `<cwd>/src/server/db/sql` in the standalone image.
+- `cli.ts`: `npm run db:migrate | db:seed | db:ping`. Loads `.env.local` / `.env` through `load-env.ts`.
+- `ping.ts`: the connection check behind `db:ping`.
 
-`migrate.ts` (`npm run db:migrate`) applies `sql/schema/*.sql` and then `sql/migrations/*.sql` in filename order, each exactly once, each in its own transaction. Applied filenames are stored in `schema_migrations`. The production container runs it on every start, so a deploy that adds a SQL file also applies it. It retries the first connection because the cluster auto-pauses when idle.
-
-`seed.ts` (`npm run db:seed`) runs `sql/seeds/*.sql` every time; write seeds with `ON CONFLICT DO NOTHING`.
-
-`ping.ts` (`npm run db:ping`) is the connection smoke test: IAM token, TLS, network.
-
-Rules for SQL files are in `sql/README.md`. Short version: new table → new numbered schema file; change to an existing table → dated file in `migrations/`; never edit a file that has already been applied.
+The server runs migrations and seeds on boot from `src/instrumentation.ts`, so `npm run dev` after `docker compose up -d` needs nothing else. Rules for SQL files are in `sql/README.md`.

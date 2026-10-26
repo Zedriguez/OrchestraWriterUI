@@ -45,3 +45,4 @@ export type ParseOutcome = { ok: true; infoMap: InfoMap; meta: ScoreMeta } | { o
 export { parseMusicXml } from "./parse";
 export { summarizeInfoMap } from "./summary";
 export { abbreviateInstrumentName } from "./names";
+export { soundingTranspose, type ParsedInstrument } from "./transpose";

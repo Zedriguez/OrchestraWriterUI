@@ -1,0 +1,294 @@
+{
+  "scoreFile": "fixtures/scores/orchestra-demo.musicxml",
+  "audioFile": "fixtures/audio/orchestra-demo.mp3",
+  "sampleRate": 22050,
+  "durationSec": 129.305,
+  "warp": {
+    "leadingSilenceSec": 1.2,
+    "splitScoreSec": 62.857,
+    "firstTempoFactor": 1.04,
+    "secondTempoFactor": 0.95
+  },
+  "measures": [
+    {
+      "n": 1,
+      "scoreStartSec": 0,
+      "recordingStartSec": 1.2
+    },
+    {
+      "n": 2,
+      "scoreStartSec": 2.143,
+      "recordingStartSec": 3.26
+    },
+    {
+      "n": 3,
+      "scoreStartSec": 4.286,
+      "recordingStartSec": 5.321
+    },
+    {
+      "n": 4,
+      "scoreStartSec": 6.429,
+      "recordingStartSec": 7.381
+    },
+    {
+      "n": 5,
+      "scoreStartSec": 8.571,
+      "recordingStartSec": 9.442
+    },
+    {
+      "n": 6,
+      "scoreStartSec": 10.714,
+      "recordingStartSec": 11.502
+    },
+    {
+      "n": 7,
+      "scoreStartSec": 12.857,
+      "recordingStartSec": 13.563
+    },
+    {
+      "n": 8,
+      "scoreStartSec": 15,
+      "recordingStartSec": 15.623
+    },
+    {
+      "n": 9,
+      "scoreStartSec": 17.143,
+      "recordingStartSec": 17.684
+    },
+    {
+      "n": 10,
+      "scoreStartSec": 19.286,
+      "recordingStartSec": 19.744
+    },
+    {
+      "n": 11,
+      "scoreStartSec": 21.429,
+      "recordingStartSec": 21.804
+    },
+    {
+      "n": 12,
+      "scoreStartSec": 23.571,
+      "recordingStartSec": 23.865
+    },
+    {
+      "n": 13,
+      "scoreStartSec": 25.714,
+      "recordingStartSec": 25.925
+    },
+    {
+      "n": 14,
+      "scoreStartSec": 27.857,
+      "recordingStartSec": 27.986
+    },
+    {
+      "n": 15,
+      "scoreStartSec": 30,
+      "recordingStartSec": 30.046
+    },
+    {
+      "n": 16,
+      "scoreStartSec": 32.143,
+      "recordingStartSec": 32.107
+    },
+    {
+      "n": 17,
+      "scoreStartSec": 34.286,
+      "recordingStartSec": 34.167
+    },
+    {
+      "n": 18,
+      "scoreStartSec": 36.429,
+      "recordingStartSec": 36.227
+    },
+    {
+      "n": 19,
+      "scoreStartSec": 38.571,
+      "recordingStartSec": 38.288
+    },
+    {
+      "n": 20,
+      "scoreStartSec": 40.714,
+      "recordingStartSec": 40.348
+    },
+    {
+      "n": 21,
+      "scoreStartSec": 42.857,
+      "recordingStartSec": 42.409
+    },
+    {
+      "n": 22,
+      "scoreStartSec": 45,
+      "recordingStartSec": 44.469
+    },
+    {
+      "n": 23,
+      "scoreStartSec": 47.143,
+      "recordingStartSec": 46.53
+    },
+    {
+      "n": 24,
+      "scoreStartSec": 49.286,
+      "recordingStartSec": 48.59
+    },
+    {
+      "n": 25,
+      "scoreStartSec": 51.429,
+      "recordingStartSec": 50.651
+    },
+    {
+      "n": 26,
+      "scoreStartSec": 53.571,
+      "recordingStartSec": 52.711
+    },
+    {
+      "n": 27,
+      "scoreStartSec": 55.714,
+      "recordingStartSec": 54.771
+    },
+    {
+      "n": 28,
+      "scoreStartSec": 57.857,
+      "recordingStartSec": 56.832
+    },
+    {
+      "n": 29,
+      "scoreStartSec": 60,
+      "recordingStartSec": 58.892
+    },
+    {
+      "n": 30,
+      "scoreStartSec": 62.143,
+      "recordingStartSec": 60.953
+    },
+    {
+      "n": 31,
+      "scoreStartSec": 64.286,
+      "recordingStartSec": 63.143
+    },
+    {
+      "n": 32,
+      "scoreStartSec": 66.429,
+      "recordingStartSec": 65.399
+    },
+    {
+      "n": 33,
+      "scoreStartSec": 68.571,
+      "recordingStartSec": 67.655
+    },
+    {
+      "n": 34,
+      "scoreStartSec": 70.714,
+      "recordingStartSec": 69.91
+    },
+    {
+      "n": 35,
+      "scoreStartSec": 72.857,
+      "recordingStartSec": 72.166
+    },
+    {
+      "n": 36,
+      "scoreStartSec": 75,
+      "recordingStartSec": 74.422
+    },
+    {
+      "n": 37,
+      "scoreStartSec": 77.143,
+      "recordingStartSec": 76.677
+    },
+    {
+      "n": 38,
+      "scoreStartSec": 79.286,
+      "recordingStartSec": 78.933
+    },
+    {
+      "n": 39,
+      "scoreStartSec": 81.429,
+      "recordingStartSec": 81.188
+    },
+    {
+      "n": 40,
+      "scoreStartSec": 83.571,
+      "recordingStartSec": 83.444
+    },
+    {
+      "n": 41,
+      "scoreStartSec": 85.714,
+      "recordingStartSec": 85.7
+    },
+    {
+      "n": 42,
+      "scoreStartSec": 88.214,
+      "recordingStartSec": 88.331
+    },
+    {
+      "n": 43,
+      "scoreStartSec": 90.714,
+      "recordingStartSec": 90.963
+    },
+    {
+      "n": 44,
+      "scoreStartSec": 93.214,
+      "recordingStartSec": 93.594
+    },
+    {
+      "n": 45,
+      "scoreStartSec": 95.714,
+      "recordingStartSec": 96.226
+    },
+    {
+      "n": 46,
+      "scoreStartSec": 98.214,
+      "recordingStartSec": 98.858
+    },
+    {
+      "n": 47,
+      "scoreStartSec": 100.714,
+      "recordingStartSec": 101.489
+    },
+    {
+      "n": 48,
+      "scoreStartSec": 103.214,
+      "recordingStartSec": 104.121
+    },
+    {
+      "n": 49,
+      "scoreStartSec": 105.714,
+      "recordingStartSec": 106.752
+    },
+    {
+      "n": 50,
+      "scoreStartSec": 108.214,
+      "recordingStartSec": 109.384
+    },
+    {
+      "n": 51,
+      "scoreStartSec": 110.714,
+      "recordingStartSec": 112.016
+    },
+    {
+      "n": 52,
+      "scoreStartSec": 113.214,
+      "recordingStartSec": 114.647
+    },
+    {
+      "n": 53,
+      "scoreStartSec": 115.714,
+      "recordingStartSec": 117.279
+    },
+    {
+      "n": 54,
+      "scoreStartSec": 118.214,
+      "recordingStartSec": 119.91
+    },
+    {
+      "n": 55,
+      "scoreStartSec": 120.714,
+      "recordingStartSec": 122.542
+    },
+    {
+      "n": 56,
+      "scoreStartSec": 123.214,
+      "recordingStartSec": 125.173
+    }
+  ]
+}

@@ -1,8 +1,9 @@
 ---
 paths:
-  - "**/export/**"
-  - "**/project-file/**"
-  - "**/persist*/**"
+  - "src/lib/export/**"
+  - "src/components/export/**"
+  - "src/shared/project-file.ts"
+  - "src/server/services/exports*.ts"
 ---
 # Export and project files
 

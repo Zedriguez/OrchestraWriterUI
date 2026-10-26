@@ -8,7 +8,16 @@ import type { GlowRenderer, GlowSprite, RenderScene } from "./renderer";
  * Brightness is applied as luminance (color → warm white) so overlapping
  * glows don't wash out, and the budget holds 64 parts at 60 fps.
  */
+export interface Canvas2DGlowRendererOptions {
+  /**
+   * Upper bound on the device-pixel ratio. Preview keeps the default 2;
+   * MP4 export renders a 1280×720 logical stage at up to 3× (4K).
+   */
+  maxDpr?: number;
+}
+
 export class Canvas2DGlowRenderer implements GlowRenderer {
+  private readonly maxDpr: number;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private low: HTMLCanvasElement | null = null;
@@ -18,6 +27,10 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
   private dpr = 1;
   private bg: CanvasGradient | null = null;
   private readonly downscale = 0.3;
+
+  constructor(options: Canvas2DGlowRendererOptions = {}) {
+    this.maxDpr = options.maxDpr ?? 2;
+  }
 
   mount(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -30,7 +43,7 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
     if (!this.canvas || !this.low) return;
     this.w = Math.max(1, Math.floor(width));
     this.h = Math.max(1, Math.floor(height));
-    this.dpr = Math.min(2, dpr);
+    this.dpr = Math.min(this.maxDpr, dpr);
     this.canvas.width = Math.floor(this.w * this.dpr);
     this.canvas.height = Math.floor(this.h * this.dpr);
     this.low.width = Math.max(1, Math.floor(this.w * this.downscale));

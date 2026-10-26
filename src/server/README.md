@@ -1,17 +1,28 @@
 # server/
 
-The backend. TypeScript, ES modules, no framework beyond Hono.
+The backend: a Hono app that runs **inside Next.js** (one process, one image).
+`src/app/api/[[...route]]/route.ts` hands every `/api/*` request to `app.ts`;
+`src/instrumentation.ts` runs migrations and seeds on boot. API reference:
+`docs/backend/API.md`.
 
-Request path: `index.ts` builds the Hono app and mounts, in order, logging, optional CORS, health routes, `/api/status`, Better Auth at `/api/auth/*`, the file routes at `/api/files`, and finally the static frontend from `public/`.
+Request path (`app.ts`, `basePath("/api")`): dev logger, optional CORS
+(`CORS_ORIGINS`), body limit, DB-free routes (`/health`, `/health/db`,
+`/config`, `/status`), the database gate (`db/readiness.ts`), Better Auth at
+`/auth/*`, then the resource routes. One error handler (`routes/errors.ts`).
 
 | Folder | What lives there | Rule |
 |--------|------------------|------|
-| `config/` | `env.ts` reads and validates all environment variables; `aws.ts` holds shared SDK settings | nothing else reads `process.env` |
+| `config/` | `env.ts` reads all environment variables (local docker-compose defaults outside production); `aws.ts` shared SDK settings | nothing else reads `process.env` |
 | `auth.ts` | the Better Auth instance: providers, table/column mapping, id strategy | the only file that knows auth internals |
-| `db/` | the `pg` pool (`client.ts`), the schema runner (`migrate.ts`), seeds, SQL files | see `db/README.md` |
-| `storage/` | S3 client and presigned-URL helpers | no HTTP, no SQL |
-| `routes/` | HTTP handlers, one file per resource | validate input, call a service, shape the response; never touch db/ or storage/ directly |
-| `services/` | business logic | call db/ and storage/; know nothing about HTTP |
+| `errors.ts` | typed errors (`NotFoundError`, `ForbiddenKeyError`, ...) | services throw these; `routes/errors.ts` maps them |
+| `db/` | the lazy global `pg` pool, migrate/seed runners, readiness gate, CLI, SQL files | see `db/README.md` |
+| `storage/` | S3 clients, key layout, presigned-URL helpers | no HTTP, no SQL |
+| `routes/` | HTTP handlers, one file per resource | validate input, call a service, shape the response; never touch db/ or storage/ |
+| `services/` | business logic and ownership checks | call db/ and storage/; know nothing about HTTP |
 | `types/` | row types mirroring the SQL tables | snake_case, as Postgres returns them |
+| `pipeline/` | the transcription pipeline (Lambda / inline) | kept from the backend repo |
 
-Run locally with `npm run dev` (watches and restarts). `npm run typecheck` before committing; CI runs the same.
+Imports: `@/shared/*` (wire types, score parser) and `@/lib/visualizer/seating`
+(pure seating plan) only; nothing from components, stores or the browser API client.
+
+Run: `docker compose up -d && npm run dev`. Test: `npm run test:api`.

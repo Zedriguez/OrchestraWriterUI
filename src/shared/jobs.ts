@@ -61,6 +61,10 @@ export interface ExportResult {
   /** download URL: a blob: URL right after a browser export, or a presigned S3 URL from history */
   url: string;
   exportId?: string;
+  /** video codec actually used (MP4 exports) */
+  codec?: string;
+  /** e.g. "No AAC encoder in this browser; the video has no audio track." */
+  warnings?: string[];
 }
 
 export interface OpenProjectResult {

@@ -10,7 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:api": "vitest run --config vitest.api.config.ts",
+    "test:api": "vitest run --config vitest.api.config.mts",
     "test:e2e": "playwright test",
     "db:migrate": "tsx src/server/db/cli.ts migrate",
     "db:seed": "tsx src/server/db/cli.ts seed",

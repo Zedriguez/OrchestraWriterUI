@@ -8,7 +8,11 @@ import { s3 } from "../storage/s3Client";
 export type Check = { ok: boolean; latencyMs: number; detail: string };
 
 function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  if (err instanceof Error && err.message) return err.message;
+  // A refused localhost connection is an AggregateError with an empty message.
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code === "string") return code;
+  return String(err);
 }
 
 /** One round trip to Postgres plus a count that proves the seed ran. */

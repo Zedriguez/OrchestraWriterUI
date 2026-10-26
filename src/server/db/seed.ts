@@ -1,14 +1,15 @@
-// Seed runner: `npm run db:seed`. Executes sql/seeds/*.sql in filename order.
+// Seed runner. Executes sql/seeds/*.sql in filename order on every boot.
 // Seeds are NOT tracked like schema files; write them to be re-runnable
-// (INSERT ... ON CONFLICT DO NOTHING) because this runs on every deploy.
+// (INSERT ... ON CONFLICT DO NOTHING).
+// Called from src/instrumentation.ts (via db/readiness.ts) and `npm run db:seed`.
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { pool, closePool } from "./client";
+import { getPool } from "./client";
+import { sqlRoot } from "./sql-root";
 
-const seedsDir = fileURLToPath(new URL("./sql/seeds/", import.meta.url));
-
-async function main(): Promise<void> {
+export async function runSeeds(options: { log?: (line: string) => void } = {}): Promise<{ ran: string[] }> {
+  const log = options.log ?? console.log;
+  const seedsDir = path.join(sqlRoot(), "seeds");
   let names: string[] = [];
   try {
     names = (await readdir(seedsDir)).filter((n) => n.endsWith(".sql")).sort();
@@ -17,14 +18,8 @@ async function main(): Promise<void> {
   }
   for (const name of names) {
     const sql = await readFile(path.join(seedsDir, name), "utf8");
-    await pool.query(sql);
-    console.log(`seeded   seeds/${name}`);
+    await getPool().query(sql);
+    log(`seeded   seeds/${name}`);
   }
-  console.log(names.length === 0 ? "No seed files." : `Ran ${names.length} seed file(s).`);
-}
-
-try {
-  await main();
-} finally {
-  await closePool();
+  return { ran: names };
 }

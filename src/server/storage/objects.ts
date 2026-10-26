@@ -1,13 +1,8 @@
-// Plain S3 object reads and writes for the pipeline (the API never moves bytes itself).
+// Plain S3 object reads and writes. Used by the transcription pipeline and the
+// parse-score job; API routes never move bytes themselves.
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { env } from "../config/env";
+import { bucket } from "./keys";
 import { s3 } from "./s3Client";
-import { StorageNotConfiguredError } from "./audio";
-
-function bucket(): string {
-  if (!env.s3.audioBucket) throw new StorageNotConfiguredError();
-  return env.s3.audioBucket;
-}
 
 export async function getObjectBytes(key: string): Promise<Uint8Array> {
   const res = await s3.send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
