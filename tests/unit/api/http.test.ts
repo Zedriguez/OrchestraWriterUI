@@ -222,7 +222,7 @@ describe("httpApi.uploadScore", () => {
 
     // presign body
     const presign = calls.find((c) => c.url === "/api/uploads");
-    expect(presign?.body).toEqual({ kind: "score", projectId: "p1", filename: "sym.musicxml", contentType: "application/vnd.recordare.musicxml+xml" });
+    expect(presign?.body).toEqual({ kind: "score", projectId: "p1", filename: "sym.musicxml", contentType: "application/vnd.recordare.musicxml+xml", bytes: expect.any(Number) });
     // S3 PUT with the same content type
     expect(xhrPuts).toHaveLength(1);
     expect(xhrPuts[0].url).toBe("https://s3.test/put");

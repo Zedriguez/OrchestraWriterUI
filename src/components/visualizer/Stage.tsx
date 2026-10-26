@@ -78,14 +78,19 @@ export function Stage({
     const renderer = new Canvas2DGlowRenderer();
     renderer.mount(canvas);
     rendererRef.current = renderer;
-    const ro = new ResizeObserver(() => {
+    const fit = () => {
       const r = wrap.getBoundingClientRect();
       renderer.resize(r.width, r.height, window.devicePixelRatio || 1);
       setSize({ w: r.width, h: r.height });
-    });
+    };
+    const ro = new ResizeObserver(fit);
     ro.observe(wrap);
+    // the renderer reads the stage tokens on resize; re-read them when ThemeSync switches Direction A/B
+    const themeObserver = new MutationObserver(fit);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => {
       ro.disconnect();
+      themeObserver.disconnect();
       renderer.destroy();
       rendererRef.current = null;
     };
@@ -225,7 +230,12 @@ export function Stage({
             }}
           >
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stage-text-2">{l.text}</span>
-            <Dyn value={l.dynamic} size="md" className="mt-1" style={{ color: l.color }} />
+            {l.dynamic ? (
+              <Dyn value={l.dynamic} size="md" className="mt-1" style={{ color: l.color }} />
+            ) : (
+              // nothing in the group is playing: no glyph, same block height so the name doesn't jump
+              <span aria-hidden className="mt-1 h-[19px]" />
+            )}
           </div>
         ))}
 

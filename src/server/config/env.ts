@@ -101,6 +101,9 @@ export const env = {
   // Transcription pipeline. "stepfunctions" in production (STATE_MACHINE_ARN set),
   // "inline" locally: the same step code runs inside the API process, no AWS needed.
   pipeline: {
+    // The audio-to-score pipeline is not part of the visualizer spec; its routes
+    // (/files, /transcriptions, /sheets) are mounted only when PIPELINE_ENABLED=1.
+    enabled: process.env.PIPELINE_ENABLED === "1",
     stateMachineArn: process.env.STATE_MACHINE_ARN || undefined,
     mode: (process.env.PIPELINE_MODE ||
       (process.env.STATE_MACHINE_ARN ? "stepfunctions" : "inline")) as "stepfunctions" | "inline",

@@ -135,6 +135,10 @@ C=$(code "$BASE/api/projects/$PID"); C2=$(curl -s -o /dev/null -w '%{http_code}'
 
 # ---------------------------------------------------------------- recordings + transcription
 head -c 3000 /dev/urandom > "$TMP/in.wav"
+# The transcription routes are mounted only with PIPELINE_ENABLED=1.
+if [ "$(code "$BASE/api/files")" = 404 ]; then
+  echo "  (transcription routes not mounted; PIPELINE_ENABLED is off, skipping that section)"
+else
 say "presign recording upload"
 UP=$(req -X POST "$BASE/api/files/upload-url" -d '{"filename":"smoke test.wav","contentType":"audio/wav"}')
 KEY=$(echo "$UP" | json key); URL=$(echo "$UP" | json uploadUrl)
@@ -165,6 +169,7 @@ DL=$(req "$BASE/api/files/$FID/download-url" | json url)
 curl -s --max-time 60 -o "$TMP/out.wav" "$DL"; cmp -s "$TMP/in.wav" "$TMP/out.wav" && ok || fail
 say "delete recording"
 C=$(code -X DELETE "$BASE/api/files/$FID"); [ "$C" = 204 ] && ok || fail "HTTP $C"
+fi
 
 # ---------------------------------------------------------------- sessions
 say "sign out"

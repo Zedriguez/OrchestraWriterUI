@@ -28,6 +28,8 @@ export interface UploadRequest {
   contentType: string;
   /** required for score/audio/export so the key lands under the project prefix */
   projectId?: string;
+  /** exact size of the file; signed into the PUT so the upload cannot grow, and checked against the per-kind limit */
+  bytes?: number;
 }
 
 export interface UploadTarget {

@@ -24,6 +24,7 @@ import {
   optStr,
   str,
 } from "./validate";
+import { MAX_AUDIO_SECONDS } from "../storage/limits";
 
 export const projectsRoutes = new Hono<AuthEnv>();
 
@@ -94,7 +95,7 @@ projectsRoutes.post("/:id/audio", async (c) => {
   const project = await projects.registerAudio(c.get("userId"), id, {
     key: str(body.key, "key", { min: 1, max: 1024, trim: false }),
     filename: str(body.filename, "filename", { min: 1, max: 255 }),
-    durationSec: num(body.durationSec, "durationSec", { min: 0.001, max: 6 * 60 * 60 }),
+    durationSec: num(body.durationSec, "durationSec", { min: 0.001, max: MAX_AUDIO_SECONDS }),
     peaks: parsePeaks(body.peaks),
   });
   return c.json({ project });
@@ -157,6 +158,14 @@ function parseDisplay(body: Record<string, unknown>): DisplaySettings {
   num(body.glowScale, "glowScale", { min: 0.6, max: 1.4 });
   for (const section of Object.values(body.sections as Record<string, unknown>)) {
     oneOf(section, "sections[*]", SECTIONS);
+  }
+  // Colors are injected into inline styles and canvas fills: hex only.
+  for (const field of ["colors", "sectionColors"] as const) {
+    for (const [key, value] of Object.entries(body[field] as Record<string, unknown>)) {
+      if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
+        throw new ValidationError(`${field}.${key} must be a hex color like #e2b04c`);
+      }
+    }
   }
   return body as unknown as DisplaySettings;
 }

@@ -13,6 +13,9 @@ import { parseMusicXml, summarizeInfoMap } from "@/shared/score";
 import { query } from "../db/client";
 import { deleteObject, infoMapKey } from "../storage/keys";
 import { getObjectBytes, putObjectBytes } from "../storage/objects";
+import { MAX_UPLOAD_BYTES } from "../storage/limits";
+
+const MAX_SCORE_BYTES = MAX_UPLOAD_BYTES.score;
 import { logActivity } from "./activity";
 import { defaultDisplaySettings } from "./display-defaults";
 import { finishJob, updateJobProgress } from "./jobs";
@@ -48,7 +51,7 @@ export async function runParseScore(input: ParseScoreInput): Promise<void> {
   let writtenKey: string | null = null;
   try {
     await updateJobProgress(jobId, 0.05, "Reading score");
-    const bytes = await getObjectBytes(input.scoreKey);
+    const bytes = await getObjectBytes(input.scoreKey, { maxBytes: MAX_SCORE_BYTES });
 
     await updateJobProgress(jobId, 0.3, "Building the information map");
     const outcome = parseMusicXml({ bytes, filename: input.filename });

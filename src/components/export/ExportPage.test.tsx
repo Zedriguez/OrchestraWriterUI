@@ -20,6 +20,8 @@ const { api, exportLib } = vi.hoisted(() => ({
     subscribeJob: vi.fn(),
   },
   exportLib: {
+    AUDIO_BITRATE: 192_000,
+    defaultVideoBitrate: () => 3_000_000,
     mp4ExportUnsupportedReason: vi.fn<() => string | null>(() => null),
     estimateMp4Bytes: vi.fn(() => 48_000_000),
   },

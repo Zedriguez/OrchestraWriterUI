@@ -12,6 +12,8 @@ export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   json?: unknown;
   signal?: AbortSignal;
+  /** let the request outlive the page (pagehide flush); bodies must stay small */
+  keepalive?: boolean;
 }
 
 /** JSON request against `/api`. Throws `ApiRequestError` (`AuthRequiredError` on 401). */
@@ -28,6 +30,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     body,
     credentials: "same-origin",
     signal: options.signal,
+    keepalive: options.keepalive,
   });
   if (!res.ok) throw await toError(res);
   if (res.status === 204) return undefined as T;

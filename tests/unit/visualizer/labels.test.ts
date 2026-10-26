@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { LABEL_MIN_GAP, computeLabels, drawLabels, placeLabels, type StageLabel } from "@/lib/visualizer/labels";
+import {
+  LABEL_BLOCK_HEIGHT,
+  LABEL_MIN_GAP,
+  LABEL_TOP_INSET,
+  LEGEND_METRICS,
+  computeLabels,
+  drawLabels,
+  drawLegend,
+  labelWidthEstimate,
+  legendBounds,
+  placeLabels,
+  visibleSections,
+  type StageLabel,
+} from "@/lib/visualizer/labels";
+import { hexToRgb } from "@/lib/utils/color";
 import { BRAVURA_DYNAMICS, type Dynamic } from "@/shared/dynamics";
 import type { InfoMap, Instrument } from "@/shared/info-map";
 import type { DisplaySettings } from "@/shared/project-file";
@@ -73,6 +87,29 @@ describe("computeLabels", () => {
     expect(labels.map((l) => l.text)).toEqual(["Violin I", "Flute", "Oboe"]);
   });
 
+  it("gives a group no dynamic while none of its parts is playing", () => {
+    const labels = computeLabels(infoMap, display, parts, "sections");
+    // Cello (P2) is silent; its last written dynamic (p) is not shown
+    expect(labels.find((l) => l.text === "Cello")!.dynamic).toBeNull();
+    const silentPerc = parts.map((p) => (p.id === "P6" ? { ...p, playing: false, level: 0 } : p));
+    const perc = computeLabels(infoMap, display, silentPerc, "sections").find((l) => l.text === "Percussion")!;
+    expect(perc.dynamic).toBeNull();
+    expect(perc.level).toBe(0);
+  });
+
+  it("takes the loudest dynamic among the playing parts only", () => {
+    // Timpani (mf) is silent, Cymbals (pp) plays: the group reads pp, not mf
+    const perc = computeLabels(infoMap, display, parts, "sections").find((l) => l.text === "Percussion")!;
+    expect(perc.dynamic).toBe("pp");
+  });
+
+  it("shows every visible part's dynamic at a mid level when previewing all (Customize, paused)", () => {
+    const labels = computeLabels(infoMap, display, parts, "sections", true);
+    expect(labels.find((l) => l.text === "Cello")!.dynamic).toBe("p");
+    expect(labels.find((l) => l.text === "Percussion")!.dynamic).toBe("mf");
+    expect(labels.every((l) => l.dynamic !== null && Math.abs(l.level - 0.55) < 1e-9)).toBe(true);
+  });
+
   it("follows a user's section reassignment", () => {
     const labels = computeLabels(infoMap, { ...display, sections: { P3: "Brass", P4: "Brass" } }, parts, "sections");
     expect(labels.some((l) => l.text === "Brass" && l.partIds.length === 2)).toBe(true);
@@ -130,6 +167,115 @@ describe("placeLabels", () => {
     expect(xs[2] - xs[1]).toBeGreaterThanOrEqual(100);
   });
 
+  function topLabel(i: number, x: number, y: number, text = "Percussion"): StageLabel {
+    return { key: `t${i}`, text, dynamic: "mf", color: "#fff", x, y, side: "top", level: 0.5, partIds: [`t${i}`] };
+  }
+
+  it("keeps the whole top label block inside the stage with the top inset, leader from its bottom to the glow", () => {
+    for (const [w, h] of [
+      [1280, 720],
+      [640, 360],
+      [420, 236],
+    ]) {
+      // percussion at the very back of the stage, as in the default seating
+      const [l] = placeLabels([topLabel(0, 0.5, 0.03)], w, h);
+      expect(l.ly).toBeGreaterThanOrEqual(LABEL_TOP_INSET);
+      expect(l.ly + LABEL_BLOCK_HEIGHT).toBeLessThanOrEqual(h);
+      const [start, end] = [l.line[0], l.line.at(-1)!];
+      expect(start[0]).toBeCloseTo(l.lx);
+      expect(start[1]).toBeGreaterThanOrEqual(l.ly + LABEL_BLOCK_HEIGHT);
+      // never back up into the label, even when the glow sits level with it
+      expect(end[1]).toBeGreaterThan(start[1]);
+      expect(end[0]).toBeCloseTo(w * 0.5);
+    }
+    const [low] = placeLabels([topLabel(0, 0.4, 0.3)], 1280, 720);
+    expect(low.line.at(-1)).toEqual([1280 * 0.4, 720 * 0.3 - 720 * 0.05]);
+  });
+
+  it("spreads top labels without overlapping each other or the side columns' x range", () => {
+    const w = 1280;
+    const sides = [...column(5, "left"), ...column(5, "right")].map((l, i) => ({ ...l, text: i % 2 ? "Double Bass III" : "Violin II", y: 0.05 + i * 0.01 }));
+    // three top labels crowded toward the left edge
+    const tops = [topLabel(0, 0.05, 0.05), topLabel(1, 0.08, 0.05, "Timpani"), topLabel(2, 0.1, 0.06)];
+    const placed = placeLabels([...sides, ...tops], w, 720);
+    const margin = w * 0.045;
+    const leftEdge = margin + Math.max(...placed.filter((l) => l.side === "left").map((l) => labelWidthEstimate(l.text)));
+    const rightEdge = w - margin - Math.max(...placed.filter((l) => l.side === "right").map((l) => labelWidthEstimate(l.text)));
+    const boxes = placed
+      .filter((l) => l.side === "top")
+      .map((l) => [l.lx - labelWidthEstimate(l.text) / 2, l.lx + labelWidthEstimate(l.text) / 2])
+      .sort((a, b) => a[0] - b[0]);
+    expect(boxes).toHaveLength(3);
+    for (const [a, b] of boxes) {
+      expect(a).toBeGreaterThan(leftEdge);
+      expect(b).toBeLessThan(rightEdge);
+    }
+    for (let i = 1; i < boxes.length; i++) expect(boxes[i][0]).toBeGreaterThan(boxes[i - 1][1]);
+  });
+
+  it("keeps a column that starts at the top edge below the top inset", () => {
+    const col = column(4, "right").map((l, i) => ({ ...l, y: 0.01 + i * 0.002 }));
+    const placed = placeLabels(col, 1280, 720);
+    for (const l of placed) expect(l.ly - LABEL_BLOCK_HEIGHT / 2).toBeGreaterThanOrEqual(LABEL_TOP_INSET - 1e-9);
+    const ys = placed.map((l) => l.ly).sort((a, b) => a - b);
+    for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(LABEL_MIN_GAP - 1e-9);
+  });
+
+  describe("dense parts mode", () => {
+    // 24 string parts all seated left of center, plus a few on the right: one label each
+    const dense: InfoMap = {
+      ...infoMap,
+      instruments: [
+        ...Array.from({ length: 24 }, (_, i) => inst(`L${i}`, `Violin ${i + 1}`, "Strings")),
+        ...Array.from({ length: 4 }, (_, i) => inst(`R${i}`, `Cello ${i + 1}`, "Strings")),
+      ],
+    };
+    const denseDisplay: DisplaySettings = {
+      ...display,
+      labelMode: "parts",
+      visibleParts: dense.instruments.map((i) => i.id),
+      positions: Object.fromEntries(
+        dense.instruments.map((p, i) => [p.id, p.id.startsWith("L") ? { x: 0.15 + (i % 4) * 0.08, y: 0.1 + (i % 6) * 0.12 } : { x: 0.8, y: 0.4 + i * 0.01 }]),
+      ),
+    };
+    const denseParts = dense.instruments.map((p) => ({ id: p.id, playing: true, dynamic: "f" as Dynamic, level: 0.7 }));
+    const labels = computeLabels(dense, denseDisplay, denseParts, "parts");
+
+    function check(h: number, bottomInset: number) {
+      const placed = placeLabels(labels, h * (16 / 9), h, { bottomInset });
+      const left = placed.filter((l) => l.side === "left").map((l) => l.ly).sort((a, b) => a - b);
+      expect(left).toHaveLength(24);
+      expect(left[0] - LABEL_BLOCK_HEIGHT / 2).toBeGreaterThanOrEqual(LABEL_TOP_INSET - 1e-9);
+      expect(left.at(-1)!).toBeLessThanOrEqual(h - 30 - bottomInset + 1e-9);
+      const gaps = left.slice(1).map((y, i) => y - left[i]);
+      return Math.min(...gaps);
+    }
+
+    it("squeezes 24 labels on one side to fit a 720-px stage, staying at least 28 px apart", () => {
+      expect(check(720, 0)).toBeGreaterThanOrEqual(28);
+    });
+
+    it("stays within bounds when the floor no longer fits, spacing labels evenly instead of stacking them", () => {
+      // export caption inset: 24 labels need 23 × 28 px but get a little less
+      expect(check(720, 22)).toBeGreaterThan(27);
+      // a small Customize stage: far too little room, but nothing leaves the stage or lands on another label
+      expect(check(360, 0)).toBeGreaterThan(12);
+    });
+  });
+
+  it("keeps the left column and top labels clear of a top-left box (the export legend)", () => {
+    const box = { right: 230, bottom: 81 };
+    const left = column(3, "left").map((l) => ({ ...l, y: 0.02 }));
+    const top = { key: "t", text: "Percussion", dynamic: "mf" as Dynamic, color: "#fff", x: 0.05, y: 0.05, side: "top" as const, level: 1, partIds: [] };
+    const right = column(2, "right").map((l) => ({ ...l, y: 0.02 }));
+    const placed = placeLabels([...left, ...right, top], 1280, 720, { avoidTopLeft: box });
+    for (const l of placed.filter((p) => p.side === "left")) expect(l.ly - LABEL_BLOCK_HEIGHT / 2).toBeGreaterThanOrEqual(box.bottom + 8 - 1e-9);
+    // the right column is not affected
+    expect(Math.min(...placed.filter((p) => p.side === "right").map((p) => p.ly))).toBeLessThan(box.bottom);
+    const t = placed.find((p) => p.side === "top")!;
+    expect(t.lx - labelWidthEstimate(t.text) / 2).toBeGreaterThan(box.right);
+  });
+
   it("returns nothing for a zero-size stage", () => {
     expect(placeLabels(column(3, "left"), 0, 0)).toEqual([]);
   });
@@ -183,12 +329,22 @@ describe("drawLabels", () => {
       width: 1280,
       height: 720,
       showConductor: false,
-      style: { sans: "Inter", serif: "Lora", bravura: true, text: "#aaa", textStrong: "#fff", textMuted: "#777" },
+      style: { sans: "Inter", serif: "Lora", bravura: true, text: "#aaa", textStrong: "#fff", textMuted: "#777", accent: "#d7ae55" },
     });
     const glyph = calls.find((c) => c.op === "fillText" && c.args[0] === BRAVURA_DYNAMICS.ff)!;
     expect(glyph.font).toContain("Bravura Text");
     expect(glyph.fillStyle).toBe(display.sectionColors.Woodwinds);
     expect(calls.some((c) => c.op === "fillText" && c.args[0] === "CONDUCTOR")).toBe(false);
+  });
+
+  it("draws the name of a silent group without a dynamic glyph", () => {
+    const { ctx, calls } = fakeCtx();
+    drawLabels(ctx as never, layout, { width: 1280, height: 720, showConductor: false });
+    const texts = calls.filter((c) => c.op === "fillText");
+    expect(texts.some((c) => c.args[0] === "CELLO")).toBe(true);
+    // Violin I (f), Woodwinds (ff), Percussion (pp) get glyphs; the silent Cello does not
+    const glyphs = texts.filter((c) => String(c.font).startsWith("italic"));
+    expect(glyphs.map((c) => c.args[0])).toEqual(["f", "ff", "pp"]);
   });
 
   it("dims quiet labels like the DOM overlay (opacity 0.4 + level × 0.6)", () => {
@@ -198,5 +354,97 @@ describe("drawLabels", () => {
     const violin = calls.find((c) => c.op === "fillText" && c.args[0] === "VIOLIN I")!;
     expect(cello.alpha).toBeCloseTo(0.4);
     expect(violin.alpha).toBeCloseTo(0.4 + 0.74 * 0.6);
+  });
+});
+
+describe("drawLegend", () => {
+  function legendCtx() {
+    const calls: Array<{ op: string; args: unknown[]; fillStyle?: unknown; font?: string }> = [];
+    const ctx = {
+      font: "",
+      fillStyle: "" as unknown,
+      strokeStyle: "" as unknown,
+      lineWidth: 1,
+      globalAlpha: 1,
+      textAlign: "left",
+      textBaseline: "alphabetic",
+      letterSpacing: "0px",
+      save: () => calls.push({ op: "save", args: [] }),
+      restore: () => calls.push({ op: "restore", args: [] }),
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      arcTo: () => {},
+      closePath: () => {},
+      stroke: () => calls.push({ op: "stroke", args: [] }),
+      measureText: (t: string) => ({ width: t.length * 6 }),
+      createRadialGradient: () => ({ addColorStop: () => {} }),
+      arc(...a: unknown[]) {
+        calls.push({ op: "arc", args: a });
+      },
+      fill() {
+        calls.push({ op: "fill", args: [], fillStyle: this.fillStyle });
+      },
+      fillText(...a: unknown[]) {
+        calls.push({ op: "fillText", args: a, fillStyle: this.fillStyle, font: this.font });
+      },
+    };
+    return { ctx, calls };
+  }
+
+  const base = { width: 1280, height: 720, sectionColors: display.sectionColors, sectionsPresent: [] as never[] };
+
+  it("draws the seven ladder dots dim to bright with their dynamics and the caption", () => {
+    const { ctx, calls } = legendCtx();
+    drawLegend(ctx as never, base);
+    const dotIdx = calls.flatMap((c, i) => (c.op === "arc" && c.args[2] === LEGEND_METRICS.dot / 2 ? [i] : []));
+    expect(dotIdx).toHaveLength(7);
+    // each dot is filled right after its arc, brighter than the one before
+    const fills = dotIdx.map((i) => calls[i + 1]);
+    expect(fills.every((f) => f.op === "fill")).toBe(true);
+    const lum = fills.map((f) => hexToRgb(String(f.fillStyle)).reduce((a, b) => a + b, 0));
+    for (let i = 1; i < lum.length; i++) expect(lum[i]).toBeGreaterThan(lum[i - 1]);
+    expect(fills.at(-1)!.fillStyle).toBe("#d7ae55");
+    const texts = calls.filter((c) => c.op === "fillText").map((c) => c.args[0]);
+    expect(texts).toEqual(["pp", "p", "mp", "mf", "f", "ff", "fff", "SOFTEST TO LOUDEST"]);
+    // dots left to right in the top-left corner
+    const xs = dotIdx.map((i) => calls[i].args[0] as number);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
+    expect(xs[0]).toBeGreaterThan(LEGEND_METRICS.x);
+    expect(calls[0].op).toBe("save");
+    expect(calls.at(-1)!.op).toBe("restore");
+  });
+
+  it("adds a section color key under the ladder when asked", () => {
+    const { ctx, calls } = legendCtx();
+    const sections = visibleSections(infoMap, { ...display, visibleParts: ["P1", "P3", "P5"] });
+    expect(sections).toEqual(["Strings", "Woodwinds", "Percussion"]);
+    const box = drawLegend(ctx as never, { ...base, sectionsPresent: sections });
+    const keyDots = calls.flatMap((c, i) => (c.op === "arc" && c.args[2] === LEGEND_METRICS.keyDot / 2 ? [calls[i + 1].fillStyle] : []));
+    expect(keyDots).toEqual([display.sectionColors.Strings, display.sectionColors.Woodwinds, display.sectionColors.Percussion]);
+    const texts = calls.filter((c) => c.op === "fillText").map((c) => c.args[0]);
+    expect(texts.slice(-3)).toEqual(["STRINGS", "WOODWINDS", "PERCUSSION"]);
+    // the key sits below the ladder, and the reported box covers both
+    const ladderOnly = legendBounds(ctx as never, base);
+    expect(box.height).toBeGreaterThan(ladderOnly.height + 3 * LEGEND_METRICS.keyRow);
+    expect(box.x).toBe(LEGEND_METRICS.x);
+  });
+
+  it("follows a section reassignment and leaves hidden sections out of the key", () => {
+    expect(visibleSections(infoMap, { ...display, visibleParts: ["P3", "P4"], sections: { P4: "Brass" } })).toEqual(["Woodwinds", "Brass"]);
+  });
+
+  it("uses Bravura glyphs when the music font is loaded", () => {
+    const { ctx, calls } = legendCtx();
+    drawLegend(ctx as never, { ...base, style: { sans: "Inter", serif: "Lora", bravura: true, text: "#aaa", textStrong: "#fff", textMuted: "#777", accent: "#ecc97a" } });
+    const glyph = calls.find((c) => c.op === "fillText" && c.args[0] === BRAVURA_DYNAMICS.fff)!;
+    expect(glyph.font).toContain("Bravura Text");
+    expect(glyph.fillStyle).toBe("#fff");
+  });
+
+  it("skips a stage too small to hold it", () => {
+    const { ctx, calls } = legendCtx();
+    expect(drawLegend(ctx as never, { ...base, width: 120, height: 60 }).width).toBe(0);
+    expect(calls.some((c) => c.op === "fillText")).toBe(false);
   });
 });

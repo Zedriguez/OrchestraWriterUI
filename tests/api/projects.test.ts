@@ -172,15 +172,8 @@ describe("score registration and the parse-score job", () => {
     const job = await waitForJob(client, reg.body.job.id);
     const after = (await client.get<{ project: ProjectDto }>(`/api/projects/${project.id}`)).body.project;
 
-    if (job.status === "failed") {
-      // The parser stub (or a parser that rejects this file) ends here.
-      expect(job.error).toBeTruthy();
-      expect(after.status).toBe("failed");
-      expect(after.statusDetail).toBe(job.error);
-      expect(after.infoMapKey).toBeNull();
-      if (/not implemented/i.test(job.error!)) console.info("parse-score: parser is still the stub; job failed as expected");
-    } else {
-      expect(job.status).toBe("succeeded");
+    expect(job.status, job.error).toBe("succeeded");
+    {
       expect(job.progress).toBe(1);
       expect(job.result).toMatchObject({ parts: after.parts, measures: after.measures });
       expect(after.status).toBe("ready");

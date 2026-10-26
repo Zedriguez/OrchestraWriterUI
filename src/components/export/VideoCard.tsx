@@ -5,7 +5,9 @@ import { Film, Info } from "lucide-react";
 import { api, type ExportMp4Options } from "@/lib/api";
 import { cancelJob } from "@/lib/jobs/registry";
 import type { ExportResult } from "@/shared/jobs";
-import { estimateMp4Bytes, mp4ExportUnsupportedReason } from "@/lib/export";
+import { AUDIO_BITRATE, defaultVideoBitrate, estimateMp4Bytes, mp4ExportUnsupportedReason } from "@/lib/export";
+
+const MAX_IN_MEMORY_MP4_BYTES = 1.5 * 1024 * 1024 * 1024;
 import { useProject } from "@/lib/store/project";
 import { usePreferences } from "@/lib/store/preferences";
 import { formatBytes, formatTime } from "@/lib/utils/format";
@@ -53,7 +55,12 @@ export function VideoCard({
   const fps = Number(frameRate) as 30 | 60;
   const source: Audio = hasRecording ? audio : "generated";
   const durationSec = source === "uploaded" ? durations.uploaded : durations.generated;
+  // Low end: measured bits per pixel for calm glow imagery; high end: the
+  // encoder's own target, which busy scores (many parts changing) approach.
   const estimate = estimateMp4Bytes(durationSec, resolution, fps);
+  const estimateHigh = Math.round(((defaultVideoBitrate(resolution, fps) + AUDIO_BITRATE) * durationSec * 1.05) / 8);
+  /** The whole MP4 is assembled in memory (ADR 0010); beyond this the tab runs out. */
+  const tooLarge = estimateHigh > MAX_IN_MEMORY_MP4_BYTES;
 
   const run = async () => {
     const name = slugify(filename) || defaultName;
@@ -114,15 +121,16 @@ export function VideoCard({
       <div className="mt-5 flex-1">
         <FilenameField id="video-filename" value={filename} onChange={setCustomName} suffix=".mp4" disabled={running} />
         <p className="tnum mt-2 text-xs text-ink-3">
-          About {formatBytes(estimate)} · {formatTime(durationSec)} at {RESOLUTION_LABEL[resolution]}, {fps} fps
+          About {formatBytes(estimate)}–{formatBytes(estimateHigh)} · {formatTime(durationSec)} at {RESOLUTION_LABEL[resolution]}, {fps} fps
         </p>
       </div>
 
       <div className="mt-6 space-y-3">
-        {unsupported ? (
+        {unsupported || (tooLarge && !job) ? (
           <p className="flex items-start gap-2 rounded-[var(--radius)] bg-paper-3 p-3 text-[13px] leading-relaxed text-ink-2" role="note">
             <Info size={14} className="mt-0.5 shrink-0 text-ink-3" aria-hidden />
-            {unsupported}
+            {unsupported ??
+              `This export could reach ${formatBytes(estimateHigh)}, more than the ${formatBytes(MAX_IN_MEMORY_MP4_BYTES)} a browser tab can hold while muxing. Choose a lower resolution or frame rate.`}
           </p>
         ) : (
           <>

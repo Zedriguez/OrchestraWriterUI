@@ -41,6 +41,7 @@ jobs:
         ports: ["9090:9090"]
     env:
       NODE_ENV: test
+      PIPELINE_ENABLED: "1"
       DB_HOST: localhost
       DB_PORT: "5433"
       DB_NAME: orchestra

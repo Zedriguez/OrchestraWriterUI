@@ -15,6 +15,8 @@ statusRoutes.get("/", async (c) => {
     auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null),
   ]);
   const user = session?.user ?? null;
+  // Infrastructure details stay behind sign-in in production.
+  if (env.isProduction && !user) return c.json({ ok: database.ok && storage.ok });
   return c.json({
     ok: database.ok && storage.ok,
     server: { env: env.nodeEnv, time: new Date().toISOString(), baseUrl: env.auth.url },

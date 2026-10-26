@@ -84,6 +84,8 @@ type SaveKind = "display" | "sync" | "stage";
 const timers: Record<SaveKind, ReturnType<typeof setTimeout> | null> = { display: null, sync: null, stage: null };
 const pendingKinds = new Set<SaveKind>();
 const inflight = new Set<Promise<void>>();
+/** kinds with a save request on the wire right now */
+const inflightKinds = new Map<SaveKind, number>();
 /** bumps on every local edit; a save only clears `dirty` if nothing changed since it started */
 let editVersion = 0;
 /** bumps on every load so stale responses are ignored */
@@ -139,6 +141,7 @@ export const useProject = create<ProjectState>((set, get) => {
       if (!summary) return Promise.resolve();
       p = api.updateProject(projectId, { stage: summary.stage });
     }
+    inflightKinds.set(kind, (inflightKinds.get(kind) ?? 0) + 1);
     const run = p
       .then((project) => {
         if (get().projectId !== projectId) return;
@@ -160,6 +163,9 @@ export const useProject = create<ProjectState>((set, get) => {
       })
       .finally(() => {
         inflight.delete(run);
+        const n = (inflightKinds.get(kind) ?? 1) - 1;
+        if (n <= 0) inflightKinds.delete(kind);
+        else inflightKinds.set(kind, n);
       });
     inflight.add(run);
     return run;
@@ -288,6 +294,9 @@ export const useProject = create<ProjectState>((set, get) => {
       const id = get().projectId;
       if (!id) return;
       const seq = loadSeq;
+      // Local edits made while this refresh is in flight must win over the
+      // server copy, otherwise the next edit builds on stale state.
+      const versionAtStart = editVersion;
       set({ loading: true });
       try {
         const project = await api.getProject(id);
@@ -304,8 +313,10 @@ export const useProject = create<ProjectState>((set, get) => {
           loadedInfoMapKey = project.infoMapKey;
         }
         const infoMap = patch.infoMap ?? s.infoMap;
-        if (!pendingKinds.has("sync")) patch.sync = project.sync;
-        if (!pendingKinds.has("display")) patch.display = project.display ?? s.display ?? (infoMap ? defaultDisplay(infoMap) : null);
+        const editedMeanwhile = editVersion !== versionAtStart;
+        const keepLocal = (kind: SaveKind) => editedMeanwhile || pendingKinds.has(kind) || inflightKinds.has(kind);
+        if (!keepLocal("sync")) patch.sync = project.sync;
+        if (!keepLocal("display")) patch.display = project.display ?? s.display ?? (infoMap ? defaultDisplay(infoMap) : null);
         patch.peaks = project.audioPeaks ?? (infoMap ? peaksFromInfoMap(infoMap) : null);
         if (project.hasRecording) {
           patch.audioUrl = (await api.getProjectUrls(id).catch(() => ({ audio: null }))).audio;
@@ -417,3 +428,18 @@ export const useProject = create<ProjectState>((set, get) => {
     replaceAuto: (sync) => editSync((s) => ({ ...sync, manual: s.sync?.manual ?? [] })),
   };
 });
+
+/**
+ * Edits waiting on the autosave delay would be lost on tab close or reload.
+ * On pagehide, send them with keepalive so the request outlives the page.
+ */
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    const { projectId, display, sync } = useProject.getState();
+    if (!projectId) return;
+    if (pendingKinds.has("display") && display) void api.saveDisplay(projectId, display, { keepalive: true }).catch(() => {});
+    if (pendingKinds.has("sync") && sync) void api.saveSync(projectId, sync, { keepalive: true }).catch(() => {});
+    pendingKinds.delete("display");
+    pendingKinds.delete("sync");
+  });
+}

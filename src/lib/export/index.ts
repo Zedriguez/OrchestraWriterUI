@@ -18,6 +18,7 @@ export {
   EXPORT_LOGICAL,
   RESOLUTIONS,
   captionText,
+  AUDIO_BITRATE,
   defaultVideoBitrate,
   estimateMp4Bytes,
   exportFrameCount,

@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     name: "api",
     environment: "node",
+    // the transcription routes are off by default; the backend tests still cover them
+    env: { PIPELINE_ENABLED: "1" },
     include: ["tests/api/**/*.test.ts"],
     fileParallelism: false,
     testTimeout: 30_000,

@@ -49,12 +49,12 @@ export interface ApiClient {
   /** presign → PUT to S3 → decode for duration + peaks → register */
   uploadAudio(projectId: string, file: File): Promise<Job<AudioUploadResult>>;
   removeAudio(projectId: string): Promise<ProjectDto>;
-  getProjectUrls(id: string): Promise<ProjectUrls>;
+  getProjectUrls(id: string, options?: { fresh?: boolean }): Promise<ProjectUrls>;
   fetchInfoMap(id: string): Promise<InfoMap>;
   /** PUT the whole sync state; resolves with the project (updatedAt, derived status) */
-  saveSync(id: string, sync: SyncState): Promise<ProjectDto>;
+  saveSync(id: string, sync: SyncState, options?: { keepalive?: boolean }): Promise<ProjectDto>;
   /** PUT the whole display settings; resolves with the project (updatedAt) */
-  saveDisplay(id: string, display: DisplaySettings): Promise<ProjectDto>;
+  saveDisplay(id: string, display: DisplaySettings, options?: { keepalive?: boolean }): Promise<ProjectDto>;
 
   // processing (browser-side jobs that persist through the API)
   startAlignment(projectId: string): Promise<Job<AlignResult>>;

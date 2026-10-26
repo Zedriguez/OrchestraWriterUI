@@ -11,8 +11,11 @@ import {
   computeLabels,
   drawCaption,
   drawLabels,
+  drawLegend,
+  legendBounds,
   placeLabels,
   resolveLabelStyle,
+  visibleSections,
 } from "@/lib/visualizer";
 import {
   AUDIO_BITRATE,
@@ -59,6 +62,8 @@ export interface RenderMp4Options {
   keyframeIntervalSec?: number;
   /** draw the "Title · bar N of M" caption (default true) */
   caption?: boolean;
+  /** draw the pp → fff legend (and a section color key when labels are off) top-left (default true) */
+  legend?: boolean;
 }
 
 export interface RenderMp4Result {
@@ -111,6 +116,8 @@ export async function renderMp4(options: RenderMp4Options): Promise<RenderMp4Res
   const lh = EXPORT_LOGICAL.height;
 
   // A real <canvas> (not OffscreenCanvas): the renderer relies on ctx.filter.
+  // mount/resize read the stage tokens from document.documentElement, so the
+  // video uses the same --stage* colors (Direction A or B) as Preview.
   const canvas = document.createElement("canvas");
   const renderer = new Canvas2DGlowRenderer({ maxDpr: dpr });
   renderer.mount(canvas);
@@ -166,7 +173,22 @@ export async function renderMp4(options: RenderMp4Options): Promise<RenderMp4Res
     const mode = display.showLabels ? display.labelMode : null;
     const totalMeasures = infoMap.measures.length;
     const showCaption = options.caption ?? true;
-    const placeOptions = { bottomInset: showCaption ? 22 : 0 };
+    const legendOptions =
+      options.legend === false
+        ? null
+        : {
+            width: lw,
+            height: lh,
+            sectionColors: display.sectionColors,
+            // with labels off, the video still needs to say which color is which section
+            sectionsPresent: display.showLabels ? [] : visibleSections(infoMap, display),
+            style,
+          };
+    const legend = legendOptions ? legendBounds(ctx, legendOptions) : null;
+    const placeOptions = {
+      bottomInset: showCaption ? 22 : 0,
+      avoidTopLeft: legend ? { right: legend.x + legend.width, bottom: legend.y + legend.height } : undefined,
+    };
     const keyEvery = options.keyframeIntervalSec ?? 2;
 
     report(framesProgress(0, total), `Rendering frames · 0 / ${total}`, true);
@@ -182,6 +204,7 @@ export async function renderMp4(options: RenderMp4Options): Promise<RenderMp4Res
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const layout = mode ? placeLabels(computeLabels(infoMap, display, frame.parts, mode), lw, lh, placeOptions) : [];
       drawLabels(ctx, layout, { width: lw, height: lh, showConductor: true, style });
+      if (legendOptions) drawLegend(ctx, legendOptions);
       if (showCaption) drawCaption(ctx, { title: options.title, detail: captionDetail(frame.measure, totalMeasures) }, { width: lw, height: lh, style });
 
       const vf = new VideoFrame(canvas, { timestamp: frameTimestampUs(i, frameRate), duration: frameDurationUs(frameRate) });

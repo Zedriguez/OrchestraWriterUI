@@ -10,7 +10,7 @@ Last updated: 2026-10-26 (branch `feat/backend-integration`, in review)
 | # | Requirement | Status | Branch / owner | Notes |
 |---|---|---|---|---|
 | 1 | Upload score (MusicXML) + optional MP3 | in review | feat/backend-integration | Presigned S3 uploads; server parse-score job with the shared parser (`src/shared/score`); `.mxl` supported |
-| 2 | Sync score and audio (auto + manual, confidence) | in review | feat/backend-integration | Chroma DTW in a Web Worker (ADR 0009); manual markers merged and persisted; 56/56 bars within 150 ms on the fixture |
+| 2 | Sync score and audio (auto + manual, confidence) | in review | feat/backend-integration | Chroma DTW in a Web Worker (ADR 0009); manual markers merged and persisted; 56/56 bars within 150 ms on synthesized audio, 55/56 on the committed MP3 (ADR 0009) |
 | 3 | Information map | in review | feat/backend-integration | Parser + 20 quirk fixtures; stored as `info-map-<job>.json` in S3; types in `src/shared/info-map.ts` |
 | 4 | Customize display (one style, colors, positions, 64 parts) | in review | feat/backend-integration | Settings autosave to `projects.display` |
 | 5 | Generate the visual | in review | feat/backend-integration | Canvas 2D renderer; labels drawn on canvas for export |
@@ -44,6 +44,8 @@ Status values: not started · in progress · in review · done · blocked
 5. ~~MP4 export~~ – in-browser WebCodecs (ADR 0010).
 6. **Transcription pipeline** – the backend's audio-to-score pipeline is kept under `/api/transcriptions` but has no UI. Keep, surface, or remove?
 7. **Hosting the Next.js image** – `scripts/deploy-init.sh` targets App Runner; run it once from `main`.
+8. **Password reset** – needs an email provider (Better Auth `sendResetPassword`); until then a lost password loses the account.
+9. **Storage quotas** – uploads are capped per file (50 MB score, 500 MB recording, 2 GB export) but there is no per-user quota or lifecycle rule for abandoned uploads yet.
 
 ## Known breakage
 
@@ -56,7 +58,7 @@ Status values: not started · in progress · in review · done · blocked
 
 ## Later-phase backlog (not in scope)
 
-Other score/audio formats (incl. extracting audio from MP4) · custom mappings
+Account-free mode and public share pages (ADR 0013) · Other score/audio formats (incl. extracting audio from MP4) · custom mappings
 and gradients · pitch, articulation, ramps, look-ahead ring · browser
 auto-restore · engraved notation (OSMD) · audio-based instrument
 identification (see `docs/research/sync-and-instrument-identification.md`).

@@ -30,7 +30,7 @@ not the loudness of the recording.** Brightness = dynamic, color = section.
 | Sync | Auto alignment + manual markers, confidence per measure | — |
 | Display | One style, labeled seating layout, adjustable colors/positions, up to 64 parts, brightness follows dynamics | Custom mappings, color/saturation/brightness gradients, pitch, articulation, ramps, look-ahead ring |
 | Playback | Controls, current-measure highlight, click a measure to start | — |
-| Saving/export | Manual project file (no account), project file or MP4 | Auto-restore in browser, sign-in, cloud storage |
+| Saving/export | Project file or MP4; accounts and server-side projects (ADR 0013) | Account-free mode, public share pages |
 
 If a task touches a later-phase item, stop and say so before writing code.
 

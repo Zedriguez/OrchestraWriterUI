@@ -32,6 +32,10 @@ export interface AudioEngine {
   currentTime(): number;
   /** true once the source reached its end */
   ended(): boolean;
+  /** Recording engines: swap the media URL (e.g. a refreshed presigned link) keeping the playhead and play state. */
+  replaceSource?(url: string): void;
+  /** Recording engines: called when playback fails after the initial load (expired link, network). */
+  setErrorHandler?(handler: ((message: string) => void) | null): void;
   /** true when the source is not producing sound (paused by the user, the OS media keys, or the end) */
   paused?(): boolean;
   destroy(): void;
@@ -84,6 +88,15 @@ export function createRecordingEngine(url: string): AudioEngine {
   };
   on("loadedmetadata", applyPendingSeek);
 
+  let errorHandler: ((message: string) => void) | null = null;
+  // Errors after the initial load (an expired presigned URL mid-playback) are
+  // reported so the owner can fetch a fresh link and call replaceSource.
+  on("error", () => {
+    if (loadPromise && el.readyState >= 1) return; // handled by load()'s own listener while loading
+    if (loadSettled) errorHandler?.(mediaErrorMessage(el.error));
+  });
+  let loadSettled = false;
+
   el.src = url;
 
   const engine: AudioEngine = {
@@ -100,6 +113,7 @@ export function createRecordingEngine(url: string): AudioEngine {
         }
         const onMeta = () => {
           cleanup();
+          loadSettled = true;
           resolve();
         };
         const onError = () => {
@@ -158,6 +172,26 @@ export function createRecordingEngine(url: string): AudioEngine {
     },
     paused() {
       return el.paused;
+    },
+    replaceSource(next) {
+      if (destroyed) return;
+      const wasPlaying = !el.paused && !el.ended;
+      const t = el.currentTime;
+      pendingSeek = t;
+      loadSettled = false;
+      el.src = next;
+      el.load();
+      el.addEventListener(
+        "loadedmetadata",
+        () => {
+          loadSettled = true;
+          if (wasPlaying) void el.play().catch(() => {});
+        },
+        { once: true },
+      );
+    },
+    setErrorHandler(handler) {
+      errorHandler = handler;
     },
     destroy() {
       destroyed = true;

@@ -13,6 +13,7 @@ import { DatabaseUnreachableError } from "../errors";
 import { isConnectionError } from "./client";
 import { runMigrations, waitForDatabase } from "./migrate";
 import { runSeeds } from "./seed";
+import { recoverInterruptedJobs } from "./recovery";
 
 type DbState = {
   status: "unknown" | "ready" | "unreachable" | "failed";
@@ -36,6 +37,8 @@ async function attempt(): Promise<void> {
     if (env.isProduction) await waitForDatabase(8);
     const { applied } = await runMigrations({ log: (line) => console.log(`[db] ${line}`) });
     await runSeeds({ log: () => {} });
+    const recovered = await recoverInterruptedJobs();
+    if (recovered > 0) console.log(`[db] marked ${recovered} job(s) interrupted by a restart as failed`);
     s.status = "ready";
     console.log(
       applied.length === 0

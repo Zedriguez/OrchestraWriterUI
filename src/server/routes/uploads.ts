@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import type { UploadKind } from "@/shared/api";
 import * as uploads from "../services/uploads";
 import { requireUser, type AuthEnv } from "./session";
-import { idValue, jsonBody, oneOf, str } from "./validate";
+import { idValue, jsonBody, num, oneOf, str } from "./validate";
 
 export const uploadsRoutes = new Hono<AuthEnv>();
 
@@ -21,6 +21,7 @@ uploadsRoutes.post("/", async (c) => {
     filename: str(body.filename, "filename", { min: 1, max: 255 }),
     contentType: str(body.contentType, "contentType", { min: 1, max: 200 }),
     projectId: body.projectId === undefined || body.projectId === null ? null : idValue(body.projectId, "projectId"),
+    bytes: body.bytes === undefined || body.bytes === null ? null : num(body.bytes, "bytes", { min: 1 }),
   });
   return c.json(target);
 });

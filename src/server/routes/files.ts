@@ -3,6 +3,7 @@
 // POST / with the key once the browser has PUT the bytes to S3 directly.
 // Project recordings use /api/uploads + /api/projects/:id/audio instead.
 import { Hono } from "hono";
+import { MAX_AUDIO_SECONDS } from "../storage/limits";
 import { ValidationError } from "../errors";
 import * as files from "../services/files";
 import { requireUser, type AuthEnv } from "./session";
@@ -30,7 +31,7 @@ filesRoutes.post("/", async (c) => {
   const body = await jsonBody(c);
   const name = str(body.name, "name", { min: 1, max: 100 });
   const key = str(body.key, "key", { min: 1, max: 1024, trim: false });
-  const audioLengthSeconds = num(body.audioLengthSeconds, "audioLengthSeconds", { min: 1 });
+  const audioLengthSeconds = num(body.audioLengthSeconds, "audioLengthSeconds", { min: 1, max: MAX_AUDIO_SECONDS });
   if (!Number.isInteger(audioLengthSeconds)) throw new ValidationError("audioLengthSeconds must be a positive integer");
   const file = await files.registerFile(c.get("userId"), { name, key, audioLengthSeconds });
   return c.json({ file }, 201);

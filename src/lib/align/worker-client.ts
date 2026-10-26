@@ -19,6 +19,11 @@ function abortError(): Error {
     : Object.assign(new Error("Alignment cancelled"), { name: "AbortError" });
 }
 
+/** Loud on purpose: the fallback blocks the UI for long recordings, and e2e listens for this line. */
+function warnMainThread(reason: unknown) {
+  console.warn("[align] worker unavailable, running on the main thread:", reason);
+}
+
 export async function alignInWorker(
   infoMap: InfoMap,
   audio: AlignAudio,
@@ -34,7 +39,8 @@ export async function alignInWorker(
   let worker: Worker;
   try {
     worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
-  } catch {
+  } catch (err) {
+    warnMainThread(err instanceof Error ? err.message : err);
     return createChromaDtwAligner(options).align(infoMap, audio, onProgress, signal);
   }
 
@@ -61,7 +67,11 @@ export async function alignInWorker(
     worker.onerror = (event) => {
       event.preventDefault?.();
       // the worker script failed to load: run on the main thread instead
-      if (!heardFromWorker) finish(() => createChromaDtwAligner(options).align(infoMap, audio, onProgress, signal).then(resolve, reject));
+      if (!heardFromWorker)
+        finish(() => {
+          warnMainThread(event.message || "the worker script failed to load");
+          createChromaDtwAligner(options).align(infoMap, audio, onProgress, signal).then(resolve, reject);
+        });
       else finish(() => reject(new Error(event.message || "Alignment worker failed")));
     };
 

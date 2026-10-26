@@ -16,6 +16,77 @@ export interface Canvas2DGlowRendererOptions {
   maxDpr?: number;
 }
 
+/** Stage colors the renderer paints with, resolved from the design tokens. */
+export interface StagePalette {
+  /** lit floor near the conductor, center of the background gradient (--stage-3) */
+  floor: string;
+  /** middle of the background gradient (--stage-2) */
+  mid: string;
+  /** outer edge of the background gradient (--stage) */
+  edge: string;
+  /** seating-plan arcs and spokes (--stage-line) */
+  line: string;
+  /** vignette color at the corners (--stage-vignette, when the stylesheet defines it) */
+  vignette: string;
+}
+
+/**
+ * Used when there is no DOM or the stylesheet lacks a token (unit tests,
+ * headless harnesses). These are the colors the renderer shipped with.
+ */
+export const FALLBACK_STAGE_PALETTE: StagePalette = {
+  floor: "#161b22",
+  mid: "#0e1217",
+  edge: "#070a0d",
+  line: "rgba(255, 255, 255, 0.08)",
+  vignette: "rgba(0, 0, 0, 0.55)",
+};
+
+const STAGE_TOKENS: Record<keyof StagePalette, string> = {
+  floor: "--stage-3",
+  mid: "--stage-2",
+  edge: "--stage",
+  line: "--stage-line",
+  vignette: "--stage-vignette",
+};
+
+/** Seating arcs and spokes as a fraction of --stage-line, so the default look is unchanged. */
+const SEATING_ARC_ALPHA = 0.625;
+const SEATING_SPOKE_ALPHA = 0.4375;
+
+/**
+ * Read the stage tokens from the document (Direction A or B, whichever is
+ * applied). Empty or invalid values fall back per token.
+ */
+export function resolveStagePalette(root?: Element): StagePalette {
+  if (typeof document === "undefined" || typeof getComputedStyle === "undefined") return FALLBACK_STAGE_PALETTE;
+  const cs = getComputedStyle(root ?? document.documentElement);
+  const out = { ...FALLBACK_STAGE_PALETTE };
+  for (const key of Object.keys(STAGE_TOKENS) as Array<keyof StagePalette>) {
+    const v = cs.getPropertyValue(STAGE_TOKENS[key]).trim();
+    if (v && isCssColor(v)) out[key] = v;
+  }
+  return out;
+}
+
+function isCssColor(v: string): boolean {
+  if (typeof CSS === "undefined" || typeof CSS.supports !== "function") return true;
+  return CSS.supports("color", v);
+}
+
+/** The same color with alpha 0 (canvas gradients interpolate unpremultiplied, so the clear stop must share its RGB). */
+function clearOf(ctx: CanvasRenderingContext2D, color: string): string {
+  ctx.fillStyle = color;
+  const c = String(ctx.fillStyle);
+  const hex = /^#([0-9a-f]{6})$/i.exec(c);
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0)`;
+  }
+  const rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(c);
+  return rgb ? `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, 0)` : "rgba(0, 0, 0, 0)";
+}
+
 export class Canvas2DGlowRenderer implements GlowRenderer {
   private readonly maxDpr: number;
   private canvas: HTMLCanvasElement | null = null;
@@ -26,6 +97,8 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
   private h = 1;
   private dpr = 1;
   private bg: CanvasGradient | null = null;
+  private vignette: CanvasGradient | null = null;
+  private palette: StagePalette = FALLBACK_STAGE_PALETTE;
   private readonly downscale = 0.3;
 
   constructor(options: Canvas2DGlowRendererOptions = {}) {
@@ -37,6 +110,7 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
     this.ctx = canvas.getContext("2d", { alpha: false });
     this.low = document.createElement("canvas");
     this.lowCtx = this.low.getContext("2d");
+    this.palette = resolveStagePalette();
   }
 
   resize(width: number, height: number, dpr: number) {
@@ -48,7 +122,10 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
     this.canvas.height = Math.floor(this.h * this.dpr);
     this.low.width = Math.max(1, Math.floor(this.w * this.downscale));
     this.low.height = Math.max(1, Math.floor(this.h * this.downscale));
+    // tokens can change with the theme; Stage calls resize when html[data-theme] flips
+    this.palette = resolveStagePalette();
     this.bg = null;
+    this.vignette = null;
   }
 
   render(scene: RenderScene) {
@@ -62,11 +139,12 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
     ctx.filter = "none";
 
     // stage background
+    const pal = this.palette;
     if (!this.bg) {
       const g = ctx.createRadialGradient(w * 0.5, h * 0.95, h * 0.1, w * 0.5, h * 0.6, Math.max(w, h) * 0.85);
-      g.addColorStop(0, "#161b22");
-      g.addColorStop(0.55, "#0e1217");
-      g.addColorStop(1, "#070a0d");
+      g.addColorStop(0, pal.floor);
+      g.addColorStop(0.55, pal.mid);
+      g.addColorStop(1, pal.edge);
       this.bg = g;
     }
     ctx.fillStyle = this.bg;
@@ -110,10 +188,13 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
     }
 
     // vignette
-    const v = ctx.createRadialGradient(w * 0.5, h * 0.55, Math.min(w, h) * 0.35, w * 0.5, h * 0.55, Math.max(w, h) * 0.78);
-    v.addColorStop(0, "rgba(0,0,0,0)");
-    v.addColorStop(1, "rgba(0,0,0,0.55)");
-    ctx.fillStyle = v;
+    if (!this.vignette) {
+      const v = ctx.createRadialGradient(w * 0.5, h * 0.55, Math.min(w, h) * 0.35, w * 0.5, h * 0.55, Math.max(w, h) * 0.78);
+      v.addColorStop(0, clearOf(ctx, pal.vignette));
+      v.addColorStop(1, pal.vignette);
+      this.vignette = v;
+    }
+    ctx.fillStyle = this.vignette;
     ctx.fillRect(0, 0, w, h);
 
     if (scene.showConductor) this.drawConductor(ctx);
@@ -131,7 +212,8 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
     const cx = CONDUCTOR.x * w;
     const cy = CONDUCTOR.y * h;
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.strokeStyle = this.palette.line;
+    ctx.globalAlpha = SEATING_ARC_ALPHA;
     ctx.lineWidth = 1;
     for (const r of [0.3, 0.46, 0.58, 0.72]) {
       ctx.beginPath();
@@ -139,7 +221,7 @@ export class Canvas2DGlowRenderer implements GlowRenderer {
       ctx.stroke();
     }
     // radial spokes
-    ctx.strokeStyle = "rgba(255,255,255,0.035)";
+    ctx.globalAlpha = SEATING_SPOKE_ALPHA;
     for (const a of [-1.1, -0.55, 0, 0.55, 1.1]) {
       ctx.beginPath();
       ctx.moveTo(cx + Math.sin(a) * 0.12 * w, cy - Math.cos(a) * 0.12 * w * 1.38);

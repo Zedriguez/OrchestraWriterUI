@@ -49,18 +49,44 @@ export function isKeyFrame(i: number, frameRate: number, intervalSec = 2): boole
   return i % every === 0;
 }
 
-/** Target video bitrate (bits/s). The stage is dark with soft glows, so modest rates look clean. */
+/**
+ * Target (ceiling) video bitrate for the VBR encoder, bits/s. The stage is
+ * dark with soft glows, so the encoder usually lands far below it; busy
+ * moments (many parts changing at once) can use the headroom.
+ */
 export function defaultVideoBitrate(resolution: ExportResolution, frameRate: ExportFrameRate): number {
   const base: Record<ExportResolution, number> = { "720p": 3_000_000, "1080p": 5_000_000, "4k": 14_000_000 };
   return Math.round(base[resolution] * (frameRate === 60 ? 1.35 : 1));
 }
 
+/** AAC bitrate requested from the audio encoder, bits/s. */
 export const AUDIO_BITRATE = 192_000;
 
-/** Rough output size in bytes (video + AAC + ~1% container overhead). */
+/**
+ * Typical H.264 output for this imagery in bits per pixel per frame. A
+ * 125 s 720p30 export measured 7.3 MB (≈ 0.47 Mbit/s ≈ 0.017 bpp); 0.02
+ * leaves a little room for busier scores.
+ */
+export const ESTIMATE_BITS_PER_PIXEL = 0.02;
+/** MP4 container overhead (moov index, sample tables) as a fraction of the payload. */
+export const ESTIMATE_CONTAINER_OVERHEAD = 0.05;
+
+/**
+ * Approximate MP4 size in bytes, for the "about N MB" hint before export.
+ *
+ *   video bits/s = width × height × fps × ESTIMATE_BITS_PER_PIXEL (never above defaultVideoBitrate)
+ *   audio bits/s = AUDIO_BITRATE when the video has sound
+ *   bytes        = (video + audio) × seconds ÷ 8 × (1 + ESTIMATE_CONTAINER_OVERHEAD)
+ *
+ * An approximation, not a promise: real size depends on the content (64
+ * bright, fast-changing parts compress worse than a quiet movement), on the
+ * codec the browser falls back to, and on the platform encoder.
+ */
 export function estimateMp4Bytes(durationSec: number, resolution: ExportResolution, frameRate: ExportFrameRate, withAudio = true): number {
-  const bits = (defaultVideoBitrate(resolution, frameRate) + (withAudio ? AUDIO_BITRATE : 0)) * Math.max(0, durationSec);
-  return Math.round((bits / 8) * 1.01);
+  const { width, height } = RESOLUTIONS[resolution];
+  const video = Math.min(width * height * frameRate * ESTIMATE_BITS_PER_PIXEL, defaultVideoBitrate(resolution, frameRate));
+  const bits = (video + (withAudio ? AUDIO_BITRATE : 0)) * Math.max(0, durationSec);
+  return Math.round((bits / 8) * (1 + ESTIMATE_CONTAINER_OVERHEAD));
 }
 
 export type MuxVideoCodec = "avc" | "hevc" | "vp9" | "av1";

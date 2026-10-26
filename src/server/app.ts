@@ -84,9 +84,11 @@ export function createApp() {
   app.route("/programs", programsRoutes);
   app.route("/activity", activityRoutes);
   app.route("/jobs", jobsRoutes);
-  app.route("/files", filesRoutes);
-  app.route("/transcriptions", transcriptionsRoutes);
-  app.route("/sheets", sheetsRoutes);
+  if (env.pipeline.enabled) {
+    app.route("/files", filesRoutes);
+    app.route("/transcriptions", transcriptionsRoutes);
+    app.route("/sheets", sheetsRoutes);
+  }
 
   app.notFound(handleNotFound);
   app.onError(handleError);

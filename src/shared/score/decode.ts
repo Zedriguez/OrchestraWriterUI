@@ -46,26 +46,53 @@ export function decodeXmlText(bytes: Uint8Array): string {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
+/** Largest uncompressed score entry we inflate (a 50 MB .mxl rarely expands past 10×). */
+export const MAX_MXL_ENTRY_BYTES = 400 * 1024 * 1024;
+const MAX_CONTAINER_BYTES = 1024 * 1024;
+
+/**
+ * Inflate only the entries we need: the container manifest (small) and the one
+ * root score file, each capped by its declared size, so a zip bomb never
+ * expands in memory.
+ */
 function decodeMxl(bytes: Uint8Array, filename: string): DecodeOutcome {
-  let entries: Record<string, Uint8Array>;
+  const names: string[] = [];
+  const sizes = new Map<string, number>();
+  let container: Uint8Array | undefined;
   try {
-    entries = unzipSync(bytes);
+    const first = unzipSync(bytes, {
+      filter: (f) => {
+        names.push(f.name);
+        sizes.set(f.name, f.originalSize);
+        return f.name === "META-INF/container.xml" && f.originalSize <= MAX_CONTAINER_BYTES;
+      },
+    });
+    container = first["META-INF/container.xml"];
   } catch {
     return { ok: false, error: `${filename} could not be unzipped. The compressed MusicXML (.mxl) file may be damaged.` };
   }
-  const names = Object.keys(entries).sort();
+  names.sort();
   let rootPath: string | null = null;
-  const container = entries["META-INF/container.xml"];
   if (container) {
     const xml = strFromU8(container);
     const m = xml.match(/<rootfile\b[^>]*\bfull-path\s*=\s*["']([^"']+)["']/);
-    if (m && entries[m[1]]) rootPath = m[1];
+    if (m && sizes.has(m[1])) rootPath = m[1];
   }
   if (!rootPath) {
     rootPath = names.find((n) => !n.startsWith("META-INF/") && /\.(musicxml|xml)$/i.test(n) && !n.endsWith("/")) ?? null;
   }
   if (!rootPath) return { ok: false, error: `${filename} does not contain a MusicXML score.` };
-  const entry = entries[rootPath];
+  const declared = sizes.get(rootPath) ?? 0;
+  if (declared > MAX_MXL_ENTRY_BYTES) {
+    return { ok: false, error: `${filename}: the score inside the archive is ${(declared / 1e6).toFixed(0)} MB; the limit is ${MAX_MXL_ENTRY_BYTES / 1e6} MB.` };
+  }
+  let entry: Uint8Array | undefined;
+  try {
+    entry = unzipSync(bytes, { filter: (f) => f.name === rootPath })[rootPath];
+  } catch {
+    return { ok: false, error: `${filename} could not be unzipped. The compressed MusicXML (.mxl) file may be damaged.` };
+  }
   if (!entry || entry.length === 0) return { ok: false, error: `${filename}: the score inside the archive is empty.` };
+  if (entry.length > MAX_MXL_ENTRY_BYTES) return { ok: false, error: `${filename}: the score inside the archive is too large.` };
   return { ok: true, text: decodeXmlText(entry), compressed: true };
 }

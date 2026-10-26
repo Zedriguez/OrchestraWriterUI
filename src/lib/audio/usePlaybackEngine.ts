@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { InfoMap } from "@/shared/info-map";
 import { usePlayback } from "@/lib/store/playback";
 import { createRecordingEngine, createScoreSynthEngine, type AudioEngine } from "./engine";
@@ -35,13 +35,57 @@ export function attachPlaybackSource(source: PlaybackSource): () => void {
  * playhead and re-seeks the new engine once it has loaded. Returns the
  * store's loading/error state for convenience.
  */
-export function useAudioEngine(source: PlaybackSource): { ready: boolean; error: string | null } {
+export function useAudioEngine(
+  source: PlaybackSource,
+  options: {
+    /** returns a fresh recording URL when the current one stops working (expired presigned link) */
+    refreshUrl?: () => Promise<string | null>;
+  } = {},
+): { ready: boolean; error: string | null } {
   const kind = source?.kind ?? null;
   const url = source?.kind === "recording" ? source.url : null;
   const infoMap = source?.kind === "score" ? source.infoMap : null;
+  const refreshRef = useRef(options.refreshUrl);
+  useEffect(() => {
+    refreshRef.current = options.refreshUrl;
+  });
+  const engineRef = useRef<AudioEngine | null>(null);
+  const lastRecoveryRef = useRef(0);
 
   useEffect(() => {
-    if (kind === "recording" && url) return attachPlaybackSource({ kind, url });
+    if (kind === "recording" && url) {
+      const current = engineRef.current;
+      // A refreshed presigned URL for the same recording: swap the source in
+      // place so playback and the playhead are not interrupted.
+      if (current && current.kind === "recording" && current.replaceSource && usePlayback.getState().engine === current) {
+        current.replaceSource(url);
+        return;
+      }
+      const cleanup = attachPlaybackSource({ kind, url });
+      const engine = usePlayback.getState().engine;
+      engineRef.current = engine;
+      engine?.setErrorHandler?.((message) => {
+        const refresh = refreshRef.current;
+        const now = Date.now();
+        if (!refresh || now - lastRecoveryRef.current < 30_000) {
+          usePlayback.setState({ error: message });
+          return;
+        }
+        lastRecoveryRef.current = now;
+        void refresh()
+          .then((fresh) => {
+            if (fresh && engineRef.current === engine) engine.replaceSource?.(fresh);
+            else usePlayback.setState({ error: message });
+          })
+          .catch(() => usePlayback.setState({ error: message }));
+      });
+      return () => {
+        engine?.setErrorHandler?.(null);
+        if (engineRef.current === engine) engineRef.current = null;
+        cleanup();
+      };
+    }
+    engineRef.current = null;
     if (kind === "score" && infoMap) return attachPlaybackSource({ kind, infoMap });
     return attachPlaybackSource(null);
   }, [kind, url, infoMap]);

@@ -92,11 +92,15 @@ export function isProjectObjectKey(key: string, userId: number, projectId: numbe
   return re.test(key) && !key.includes("..");
 }
 
-/** URL the browser can PUT the file to. It must send the same Content-Type. */
-export function presignUpload(key: string, contentType: string): Promise<string> {
+/**
+ * URL the browser can PUT the file to. It must send the same Content-Type, and
+ * when `bytes` is given the same Content-Length (signed, so the upload cannot
+ * be larger than announced).
+ */
+export function presignUpload(key: string, contentType: string, bytes?: number): Promise<string> {
   return getSignedUrl(
     s3Presign,
-    new PutObjectCommand({ Bucket: bucket(), Key: key, ContentType: contentType }),
+    new PutObjectCommand({ Bucket: bucket(), Key: key, ContentType: contentType, ...(bytes ? { ContentLength: bytes } : {}) }),
     { expiresIn: URL_TTL_SECONDS },
   );
 }

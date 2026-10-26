@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
+import { api } from "@/lib/api";
 import { useAudioEngine, type PlaybackSource } from "@/lib/audio";
 import { useProject } from "@/lib/store/project";
 import { usePlayback } from "@/lib/store/playback";
@@ -15,6 +16,7 @@ const SILENT_STEPS = new Set(["import", "export"]);
  * one, else playback generated from the score, else a silent clock.
  */
 export function PlaybackSourceMount() {
+  const projectId = useProject((s) => s.projectId);
   const hasRecording = useProject((s) => s.summary?.hasRecording ?? false);
   const audioUrl = useProject((s) => s.audioUrl);
   const infoMap = useProject((s) => s.infoMap);
@@ -24,7 +26,8 @@ export function PlaybackSourceMount() {
     if (infoMap) return { kind: "score", infoMap };
     return null;
   }, [hasRecording, audioUrl, infoMap]);
-  useAudioEngine(source);
+  const refreshUrl = useCallback(async () => (projectId ? (await api.getProjectUrls(projectId, { fresh: true })).audio : null), [projectId]);
+  useAudioEngine(source, { refreshUrl });
 
   const pathname = usePathname();
   const step = pathname?.split("/").filter(Boolean).pop() ?? "";

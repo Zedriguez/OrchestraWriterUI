@@ -99,15 +99,39 @@ export function isTerminal(status: JobStatus): boolean {
 export async function mirrorRemoteJob<T>(
   localId: string,
   fetchJob: () => Promise<Job<T>>,
-  options: { intervalMs?: number; signal?: AbortSignal; map?: (remote: Job<T>) => Partial<Job<T>> } = {},
+  options: {
+    intervalMs?: number;
+    signal?: AbortSignal;
+    map?: (remote: Job<T>) => Partial<Job<T>>;
+    /** consecutive fetch failures tolerated before the local job fails (network blips) */
+    maxFailures?: number;
+    /** a server job whose updatedAt is older than this while still running is considered dead */
+    staleAfterMs?: number;
+  } = {},
 ): Promise<Job<T>> {
   const interval = options.intervalMs ?? 1200;
+  const maxFailures = options.maxFailures ?? 5;
+  const staleAfterMs = options.staleAfterMs ?? 3 * 60_000;
+  let failures = 0;
   for (;;) {
     if (options.signal?.aborted) throw new Error("Cancelled");
-    const remote = await fetchJob();
+    let remote: Job<T>;
+    try {
+      remote = await fetchJob();
+      failures = 0;
+    } catch (err) {
+      failures++;
+      if (failures >= maxFailures) throw err;
+      await new Promise((r) => setTimeout(r, interval * failures));
+      continue;
+    }
     const patch = options.map ? options.map(remote) : { status: remote.status, progress: remote.progress, message: remote.message, result: remote.result, error: remote.error };
     const updated = updateJob<T>(localId, patch) ?? remote;
     if (isTerminal(remote.status)) return updated;
+    const age = Date.now() - new Date(remote.updatedAt).getTime();
+    if (Number.isFinite(age) && age > staleAfterMs) {
+      throw new Error("The server stopped reporting progress on this job. Please try again.");
+    }
     await new Promise((r) => setTimeout(r, interval));
   }
 }

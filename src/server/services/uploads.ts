@@ -2,7 +2,8 @@
 // caller's prefix, sign a PUT for it. The browser PUTs the bytes straight to S3,
 // then calls the matching register route with the key.
 import type { UploadKind, UploadTarget } from "@/shared/api";
-import { ValidationError } from "../errors";
+import { TooLargeError, ValidationError } from "../errors";
+import { MAX_UPLOAD_BYTES } from "../storage/limits";
 import {
   newImportKey,
   newProjectObjectKey,
@@ -45,10 +46,14 @@ const FOLDER: Record<Exclude<UploadKind, "project">, ProjectFolder> = {
 
 export async function createUpload(
   userId: number,
-  input: { kind: UploadKind; filename: string; contentType: string; projectId: number | null },
+  input: { kind: UploadKind; filename: string; contentType: string; projectId: number | null; bytes?: number | null },
 ): Promise<UploadTarget> {
   if (!contentTypeAllowed(input.kind, input.contentType)) {
     throw new ValidationError(`Content type ${input.contentType} is not accepted for a ${input.kind} upload`);
+  }
+  const limit = MAX_UPLOAD_BYTES[input.kind];
+  if (input.bytes && input.bytes > limit) {
+    throw new TooLargeError(`A ${input.kind} file may be at most ${Math.round(limit / 1e6)} MB`);
   }
   let key: string;
   if (input.kind === "project") {
@@ -58,6 +63,6 @@ export async function createUpload(
     await assertProjectOwned(userId, input.projectId);
     key = newProjectObjectKey(userId, input.projectId, FOLDER[input.kind], input.filename);
   }
-  const uploadUrl = await presignUpload(key, input.contentType);
+  const uploadUrl = await presignUpload(key, input.contentType, input.bytes ?? undefined);
   return { key, uploadUrl, expiresInSeconds: URL_TTL_SECONDS };
 }

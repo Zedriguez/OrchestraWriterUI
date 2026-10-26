@@ -1,7 +1,8 @@
 import type { InfoMap } from "@/shared/info-map";
 import type { DisplaySettings } from "@/shared/project-file";
-import { BRAVURA_DYNAMICS, louder, type Dynamic } from "@/shared/dynamics";
+import { BRAVURA_DYNAMICS, DYNAMICS, louder, type Dynamic } from "@/shared/dynamics";
 import { SECTION_ORDER, type Section } from "@/shared/sections";
+import { mix } from "@/lib/utils/color";
 import { partColor } from "./scene";
 
 /**
@@ -14,7 +15,11 @@ import { partColor } from "./scene";
 export interface StageLabel {
   key: string;
   text: string;
-  dynamic: Dynamic;
+  /**
+   * Loudest written dynamic among the group's playing parts; null when none
+   * of them is playing (the name stays, dimmed, without a glyph).
+   */
+  dynamic: Dynamic | null;
   color: string;
   /** normalized anchor on the stage */
   x: number;
@@ -44,8 +49,14 @@ export type LabelMode = DisplaySettings["labelMode"];
 
 /** Minimum vertical distance between two label centers on the same side, px. */
 export const LABEL_MIN_GAP = 46;
-/** Horizontal distance between neighboring top (percussion) labels, px. */
+/** Minimum horizontal distance between neighboring top (percussion) label centers, px. */
 export const LABEL_TOP_SPACING = 110;
+/** Free space between the stage's top edge and the highest label block, px. */
+export const LABEL_TOP_INSET = 12;
+/** Height of a label block (10 px name + 4 px gap + 19 px dynamic, rounded up for the DOM line box), px. */
+export const LABEL_BLOCK_HEIGHT = 34;
+/** Horizontal padding kept between a top label and its neighbors or the side columns, px. */
+const TOP_LABEL_PAD = 16;
 
 /** Typography of a label block, in logical px. Mirrors the DOM overlay classes in Stage.tsx. */
 export const LABEL_METRICS = {
@@ -105,7 +116,7 @@ export function computeLabels(
     const text = g.ids.length === 1 && (mode === "parts" || g.section === "Strings") ? inst.name : g.section;
     const color = g.ids.length === 1 ? partColor(infoMap, display, g.ids[0]) : display.sectionColors[g.section];
     const side: StageLabel["side"] = g.section === "Percussion" && g.ids.length > 1 ? "top" : x < 0.5 ? "left" : "right";
-    out.push({ key, text, dynamic: dyn ?? byId.get(g.ids[0])?.dynamic ?? "mp", color, x, y, side, level, partIds: g.ids });
+    out.push({ key, text, dynamic: dyn, color, x, y, side, level, partIds: g.ids });
   }
   // stable order: sections then y
   out.sort((a, b) => SECTION_ORDER.indexOf(sectionOf(a.partIds[0])) - SECTION_ORDER.indexOf(sectionOf(b.partIds[0])) || a.y - b.y);
@@ -113,37 +124,45 @@ export function computeLabels(
 }
 
 export interface PlaceLabelsOptions {
-  /** minimum distance between label centers on a side; default LABEL_MIN_GAP */
+  /** preferred distance between label centers on a side; default LABEL_MIN_GAP */
   minGap?: number;
   /** px kept free at the bottom (e.g. for an export caption) */
   bottomInset?: number;
+  /** a box in the top-left corner (e.g. the export legend) that labels must stay out of, px */
+  avoidTopLeft?: { right: number; bottom: number };
 }
 
-/** Column placement with collision avoidance, and leader lines that bend once. */
+/**
+ * Column placement with collision avoidance, and leader lines that bend once.
+ *
+ * Left and right columns keep every block between LABEL_TOP_INSET and the
+ * bottom limit. A column with more labels than fit at `minGap` is squeezed to
+ * the largest even spacing that fits (about 28 px for 24 labels on a 720-px
+ * stage) rather than letting clamped labels stack at one edge. Top
+ * labels sit LABEL_TOP_INSET below the edge, spread horizontally between the
+ * two columns, with a leader from the bottom of the block to the glow.
+ */
 export function placeLabels(labels: StageLabel[], w: number, h: number, options: PlaceLabelsOptions = {}): PlacedLabel[] {
   if (!w || !h) return [];
   const minGap = options.minGap ?? LABEL_MIN_GAP;
-  const bottom = h - 30 - (options.bottomInset ?? 0);
+  const top = LABEL_TOP_INSET + LABEL_BLOCK_HEIGHT / 2;
+  const bottom = Math.max(top, h - 30 - (options.bottomInset ?? 0));
   const margin = w * 0.045;
   const out: PlacedLabel[] = [];
-  for (const side of ["left", "right", "top"] as const) {
+  const colWidth = { left: 0, right: 0 };
+  const avoid = options.avoidTopLeft;
+  for (const side of ["left", "right"] as const) {
     const col = labels.filter((l) => l.side === side).sort((a, b) => a.y - b.y);
-    if (side === "top") {
-      col.forEach((l, i) => {
-        const lx = w * l.x + (i - (col.length - 1) / 2) * LABEL_TOP_SPACING;
-        const ly = h * 0.07;
-        out.push({ ...l, lx, ly, line: [[lx, ly + 24], [lx, h * l.y - h * 0.05]] });
-      });
-      continue;
-    }
-    // spread vertically so labels don't overlap
-    const ys = col.map((l) => h * l.y);
-    for (let i = 1; i < ys.length; i++) if (ys[i] < ys[i - 1] + minGap) ys[i] = ys[i - 1] + minGap;
-    for (let i = ys.length - 1; i >= 0; i--) {
-      const limit = bottom - (ys.length - 1 - i) * minGap;
-      if (ys[i] > limit) ys[i] = limit;
-    }
-    for (let i = 1; i < ys.length; i++) if (ys[i] < ys[i - 1] + minGap) ys[i] = ys[i - 1] + minGap;
+    if (col.length === 0) continue;
+    colWidth[side] = Math.max(...col.map((l) => labelWidthEstimate(l.text)));
+    // the left column starts below a top-left box (it shares the column's x range)
+    const colTop = side === "left" && avoid && avoid.right > margin ? Math.max(top, avoid.bottom + 8 + LABEL_BLOCK_HEIGHT / 2) : top;
+    const ys = spread(
+      col.map((l) => h * l.y),
+      colTop,
+      bottom,
+      col.map(() => minGap),
+    );
     col.forEach((l, i) => {
       const ly = ys[i];
       const bx = w * l.x;
@@ -159,12 +178,69 @@ export function placeLabels(labels: StageLabel[], w: number, h: number, options:
       out.push({ ...l, lx, ly, line: [start, bend, [reach, by]] });
     });
   }
+
+  const tops = labels.filter((l) => l.side === "top").sort((a, b) => a.x - b.x);
+  if (tops.length > 0) {
+    const widths = tops.map((l) => labelWidthEstimate(l.text));
+    // keep clear of the side columns' whole x range, not just the labels at the same height
+    let left = colWidth.left ? margin + colWidth.left + TOP_LABEL_PAD : margin;
+    if (avoid && avoid.bottom > LABEL_TOP_INSET) left = Math.max(left, avoid.right + TOP_LABEL_PAD);
+    const right = colWidth.right ? w - margin - colWidth.right - TOP_LABEL_PAD : w - margin;
+    const gaps = widths.map((wd, i) => (i === 0 ? 0 : Math.max(LABEL_TOP_SPACING, (widths[i - 1] + wd) / 2 + TOP_LABEL_PAD)));
+    const xs = spread(
+      tops.map((l) => w * l.x),
+      left + widths[0] / 2,
+      right - widths[widths.length - 1] / 2,
+      gaps,
+    );
+    const ly = LABEL_TOP_INSET;
+    const lineTop = ly + LABEL_BLOCK_HEIGHT + 4;
+    tops.forEach((l, i) => {
+      const lx = xs[i];
+      // aim just above the glow center, but never back up into the label
+      const end: [number, number] = [w * l.x, Math.max(lineTop + 6, h * l.y - h * 0.05)];
+      out.push({ ...l, lx, ly, line: [[lx, lineTop], end] });
+    });
+  }
   return out;
 }
 
-export function labelWidthEstimate(text: string): number {
-  return Math.min(120, Math.max(60, text.length * 7.2));
+/**
+ * 1-D collision avoidance: move sorted positions apart by at least gaps[i]
+ * (distance from item i-1 to item i; gaps[0] is ignored) while keeping them
+ * within [lo, hi]. When the gaps don't fit, they shrink proportionally until
+ * they do, so a crowded run is spaced evenly instead of piling up at an edge.
+ */
+function spread(desired: number[], lo: number, hi: number, gaps: number[]): number[] {
+  const n = desired.length;
+  if (n === 0) return [];
+  const hiC = Math.max(lo, hi);
+  const room = hiC - lo;
+  let g = gaps.map((v, i) => (i === 0 ? 0 : v));
+  const need = g.reduce((a, b) => a + b, 0);
+  if (need > room) g = g.map((v) => (v * room) / need);
+  const out = desired.map((v) => Math.max(lo, Math.min(hiC, v)));
+  for (let i = 1; i < n; i++) out[i] = Math.max(out[i], out[i - 1] + g[i]);
+  let limit = hiC;
+  for (let i = n - 1; i >= 0; i--) {
+    out[i] = Math.min(out[i], limit);
+    limit = out[i] - g[i];
+  }
+  return out;
 }
+
+/**
+ * Width of a label name in px: uppercase, 10 px semibold, 0.18em tracking.
+ * Per-character classes because wide capitals (W, M) and narrow ones (I)
+ * differ by 2× at this size; within ~10 % of measureText for orchestra names.
+ */
+export function labelWidthEstimate(text: string): number {
+  let px = 0;
+  for (const ch of text.toUpperCase()) px += NARROW.test(ch) ? 5 : WIDE.test(ch) ? 11.5 : 9;
+  return Math.min(150, Math.max(60, px));
+}
+const NARROW = /[I1.,:;'’()\-/ ]/;
+const WIDE = /[MW]/;
 
 /* ------------------------------------------------------------------ */
 /* Canvas drawing (export)                                              */
@@ -184,6 +260,8 @@ export interface LabelStyle {
   textStrong: string;
   /** conductor caption color (--stage-text-3) */
   textMuted: string;
+  /** legend ladder accent (--brass-2) */
+  accent: string;
 }
 
 /**
@@ -197,9 +275,10 @@ export const FALLBACK_LABEL_STYLE: LabelStyle = {
   text: "rgba(236, 230, 218, 0.62)",
   textStrong: "#ece6da",
   textMuted: "rgba(236, 230, 218, 0.38)",
+  accent: "#d7ae55",
 };
 
-/** Read the stage tokens (--stage-text*, --font-inter, --font-lora) and whether Bravura Text is loaded. */
+/** Read the stage tokens (--stage-text*, --brass-2, --font-inter, --font-lora) and whether Bravura Text is loaded. */
 export function resolveLabelStyle(root?: Element): LabelStyle {
   if (typeof document === "undefined" || typeof getComputedStyle === "undefined") return FALLBACK_LABEL_STYLE;
   const el = root ?? document.documentElement;
@@ -214,6 +293,7 @@ export function resolveLabelStyle(root?: Element): LabelStyle {
     text: v("--stage-text-2") || FALLBACK_LABEL_STYLE.text,
     textStrong: v("--stage-text") || FALLBACK_LABEL_STYLE.textStrong,
     textMuted: v("--stage-text-3") || FALLBACK_LABEL_STYLE.textMuted,
+    accent: v("--brass-2") || FALLBACK_LABEL_STYLE.accent,
   };
 }
 
@@ -288,15 +368,12 @@ export function drawLabels(ctx: LabelCtx, layout: PlacedLabel[], options: DrawLa
     ctx.font = `600 ${m.textSize}px ${style.sans}`;
     ctx.fillStyle = style.text;
     withTracking(ctx, m.tracking, () => ctx.fillText(l.text.toUpperCase(), l.lx, top));
+    // a silent group keeps its name (dimmed by level) and draws no glyph
+    if (!l.dynamic) continue;
     ctx.fillStyle = l.color;
     const dynTop = top + m.textSize + m.dynGap;
-    if (style.bravura) {
-      ctx.font = `${m.dynSize}px "Bravura Text"`;
-      ctx.fillText(BRAVURA_DYNAMICS[l.dynamic], l.lx, dynTop);
-    } else {
-      ctx.font = `italic 600 ${m.dynSize}px ${style.serif}`;
-      ctx.fillText(l.dynamic, l.lx, dynTop);
-    }
+    setDynFont(ctx, style, m.dynSize);
+    ctx.fillText(dynGlyph(style, l.dynamic), l.lx, dynTop);
   }
 
   if (options.showConductor) {
@@ -332,6 +409,210 @@ export function drawCaption(
   ctx.fillStyle = style.text;
   ctx.fillText(title ? `  ·  ${caption.detail}` : caption.detail, x + titleW, y);
   ctx.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/* Legend (export)                                                      */
+/* ------------------------------------------------------------------ */
+
+/** Logical px. Mirrors LadderDots (src/components/music/DynamicLegend.tsx) at left-4 top-4. */
+export const LEGEND_METRICS = {
+  x: 16,
+  y: 16,
+  padX: 14,
+  padY: 8,
+  radius: 16,
+  dot: 12,
+  /** gap-3 between the seven columns */
+  colGap: 12,
+  /** gap-1.5 between a dot and its glyph */
+  dotGap: 6,
+  dynSize: 15,
+  captionGap: 6,
+  captionSize: 9.5,
+  captionTracking: 1.71,
+  /** the section color key below the ladder */
+  keyGap: 8,
+  keyPadX: 12,
+  keyPadY: 9,
+  keyDot: 8,
+  keyRow: 18,
+  keyTextSize: 10,
+  keyTracking: 1.8,
+} as const;
+
+/** .stage-glass in globals.css has no token yet; these mirror it. */
+const GLASS_FILL = "rgba(10, 13, 17, 0.55)";
+const GLASS_LINE = "rgba(255, 255, 255, 0.08)";
+/** LadderDots mixes the accent with this dark brass: color-mix(in srgb, var(--brass-2) 30–100 %, #3a3221). */
+const LADDER_DARK = "#3a3221";
+const LEGEND_CAPTION = "SOFTEST TO LOUDEST";
+
+export interface DrawLegendOptions {
+  /** logical stage size in px; the caller sets the device-pixel transform */
+  width: number;
+  height: number;
+  sectionColors: Record<Section, string>;
+  /** sections listed in the color key, in display order; empty draws the ladder only */
+  sectionsPresent: Section[];
+  style?: LabelStyle;
+}
+
+export interface LegendBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+type LegendCtx = LabelCtx & Pick<CanvasRenderingContext2D, "arc" | "arcTo" | "closePath" | "fill" | "createRadialGradient">;
+
+/** Sections that have at least one visible part, in seating order (for the export color key). */
+export function visibleSections(infoMap: InfoMap, display: DisplaySettings): Section[] {
+  const visible = new Set(display.visibleParts);
+  const present = new Set<Section>();
+  for (const inst of infoMap.instruments) if (visible.has(inst.id)) present.add(display.sections[inst.id] ?? inst.section);
+  return SECTION_ORDER.filter((s) => present.has(s));
+}
+
+/** Where the legend (ladder plus optional key) lands, in logical px. Use it to keep labels clear. */
+export function legendBounds(ctx: LegendCtx, options: DrawLegendOptions): LegendBox {
+  return legendLayout(ctx, options).bounds;
+}
+
+/**
+ * The pp → fff brightness ladder in the top-left corner (seven dots, dim to
+ * bright, the dynamic below each, "Softest to loudest"), plus a section
+ * color key under it when `sectionsPresent` is non-empty. Matches the
+ * on-stage LadderDots so exported video carries a visible legend.
+ */
+export function drawLegend(ctx: LegendCtx, options: DrawLegendOptions): LegendBox {
+  const style = options.style ?? FALLBACK_LABEL_STYLE;
+  const m = LEGEND_METRICS;
+  const lay = legendLayout(ctx, options);
+  if (lay.bounds.width + m.x * 2 > options.width || lay.bounds.height + m.y * 2 > options.height) return { x: m.x, y: m.y, width: 0, height: 0 };
+  ctx.save();
+  ctx.globalAlpha = 1;
+
+  // ladder panel
+  glassPanel(ctx, m.x, m.y, lay.ladder.width, lay.ladder.height, m.radius);
+  const dotY = m.y + m.padY + m.dot / 2;
+  let cx = m.x + (lay.ladder.width - lay.rowWidth) / 2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  DYNAMICS.forEach((d, i) => {
+    const t = i / (DYNAMICS.length - 1);
+    const colW = lay.colWidths[i];
+    const x = cx + colW / 2;
+    // soft glow (box-shadow 0 0 4–16px in LadderDots)
+    const reach = m.dot / 2 + 4 + t * 12;
+    const glow = ctx.createRadialGradient(x, dotY, 0, x, dotY, reach);
+    glow.addColorStop(0, withAlpha(style.accent, 0.1 + t * 0.6));
+    glow.addColorStop(m.dot / 2 / reach, withAlpha(style.accent, (0.1 + t * 0.6) * 0.6));
+    glow.addColorStop(1, withAlpha(style.accent, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, dotY, reach, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = isHex(style.accent) ? mix(LADDER_DARK, style.accent, 0.3 + t * 0.7) : style.accent;
+    ctx.beginPath();
+    ctx.arc(x, dotY, m.dot / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = style.textStrong;
+    setDynFont(ctx, style, m.dynSize);
+    ctx.fillText(dynGlyph(style, d), x, dotY + m.dot / 2 + m.dotGap);
+    cx += colW + m.colGap;
+  });
+  ctx.font = `600 ${m.captionSize}px ${style.sans}`;
+  ctx.fillStyle = style.textMuted;
+  withTracking(ctx, m.captionTracking, () => ctx.fillText(LEGEND_CAPTION, m.x + lay.ladder.width / 2, lay.captionTop));
+
+  // section color key
+  if (lay.key) {
+    const k = lay.key;
+    glassPanel(ctx, m.x, k.y, k.width, k.height, 12);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = `600 ${m.keyTextSize}px ${style.sans}`;
+    options.sectionsPresent.forEach((section, i) => {
+      const y = k.y + m.keyPadY + m.keyRow * i + m.keyRow / 2;
+      ctx.fillStyle = options.sectionColors[section];
+      ctx.beginPath();
+      ctx.arc(m.x + m.keyPadX + m.keyDot / 2, y, m.keyDot / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = style.text;
+      withTracking(ctx, m.keyTracking, () => ctx.fillText(section.toUpperCase(), m.x + m.keyPadX + m.keyDot + 8, y));
+    });
+  }
+  ctx.restore();
+  return lay.bounds;
+}
+
+function legendLayout(ctx: LegendCtx, options: DrawLegendOptions) {
+  const style = options.style ?? FALLBACK_LABEL_STYLE;
+  const m = LEGEND_METRICS;
+  ctx.save();
+  setDynFont(ctx, style, m.dynSize);
+  const colWidths = DYNAMICS.map((d) => Math.max(m.dot, ctx.measureText(dynGlyph(style, d)).width));
+  ctx.font = `600 ${m.captionSize}px ${style.sans}`;
+  const captionW = ctx.measureText(LEGEND_CAPTION).width + m.captionTracking * LEGEND_CAPTION.length;
+  ctx.font = `600 ${m.keyTextSize}px ${style.sans}`;
+  const keyTextW = Math.max(0, ...options.sectionsPresent.map((s) => ctx.measureText(s.toUpperCase()).width + m.keyTracking * s.length));
+  ctx.restore();
+
+  const rowWidth = colWidths.reduce((a, b) => a + b, 0) + m.colGap * (DYNAMICS.length - 1);
+  const ladder = {
+    width: Math.max(rowWidth, captionW) + m.padX * 2,
+    height: m.padY * 2 + m.dot + m.dotGap + m.dynSize + m.captionGap + m.captionSize,
+  };
+  const captionTop = m.y + m.padY + m.dot + m.dotGap + m.dynSize + m.captionGap;
+  const n = options.sectionsPresent.length;
+  const key = n
+    ? { y: m.y + ladder.height + m.keyGap, width: m.keyPadX * 2 + m.keyDot + 8 + keyTextW, height: m.keyPadY * 2 + m.keyRow * n }
+    : null;
+  const bounds: LegendBox = {
+    x: m.x,
+    y: m.y,
+    width: Math.max(ladder.width, key?.width ?? 0),
+    height: key ? key.y + key.height - m.y : ladder.height,
+  };
+  return { colWidths, rowWidth, ladder, captionTop, key, bounds };
+}
+
+function glassPanel(ctx: LegendCtx, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+  ctx.fillStyle = GLASS_FILL;
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = GLASS_LINE;
+  ctx.stroke();
+}
+
+function setDynFont(ctx: LabelCtx, style: LabelStyle, size: number) {
+  ctx.font = style.bravura ? `${size}px "Bravura Text"` : `italic 600 ${size}px ${style.serif}`;
+}
+
+function dynGlyph(style: LabelStyle, d: Dynamic) {
+  return style.bravura ? BRAVURA_DYNAMICS[d] : d;
+}
+
+function isHex(c: string) {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.trim());
+}
+
+/** Accent at a given alpha; non-hex tokens fall back to the default brass. */
+function withAlpha(c: string, a: number) {
+  const hex = isHex(c) ? c.trim() : FALLBACK_LABEL_STYLE.accent;
+  const full = hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex;
+  const n = parseInt(full.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 }
 
 function withTracking(ctx: LabelCtx, px: number, draw: () => void) {

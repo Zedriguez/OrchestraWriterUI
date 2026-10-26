@@ -52,13 +52,35 @@ describe("export frame helpers", () => {
     expect(() => muxCodecFor("theora")).toThrow(/Unsupported/);
   });
 
-  it("estimates size from the bitrate", () => {
+  it("keeps the encoder targets ordered", () => {
     expect(defaultVideoBitrate("1080p", 60)).toBeGreaterThan(defaultVideoBitrate("1080p", 30));
     expect(defaultVideoBitrate("4k", 30)).toBeGreaterThan(defaultVideoBitrate("1080p", 60));
-    const bytes = estimateMp4Bytes(60, "1080p", 30);
-    expect(bytes).toBeGreaterThan(30_000_000);
-    expect(bytes).toBeLessThan(50_000_000);
-    expect(estimateMp4Bytes(60, "1080p", 30, false)).toBeLessThan(bytes);
+  });
+
+  it("estimates size from bits per pixel per frame, plus AAC and container overhead", () => {
+    // 1280 × 720 × 30 × 0.02 = 552,960 bit/s of video; + 192 kbit/s AAC; × 125 s ÷ 8 × 1.05
+    expect(estimateMp4Bytes(125, "720p", 30)).toBe(12_222_000);
+    expect(estimateMp4Bytes(125, "720p", 30, false)).toBe(9_072_000);
+    // measured on the 14-part demo score (Chrome, H.264): 13.2 MB with audio; stay within ±25 %
+    expect(estimateMp4Bytes(125, "720p", 30) / 13_248_268).toBeGreaterThan(0.75);
+    expect(estimateMp4Bytes(125, "720p", 30) / 13_248_268).toBeLessThan(1.25);
+    // 1080p60 with audio lands at 2–3 Mbit/s for this imagery
+    const mbps = (estimateMp4Bytes(60, "1080p", 60) * 8) / 60 / 1e6;
+    expect(mbps).toBeGreaterThan(2);
+    expect(mbps).toBeLessThan(3);
+  });
+
+  it("scales with pixels and frame rate, never above the encoder's target", () => {
+    const base = estimateMp4Bytes(60, "720p", 30, false);
+    expect(estimateMp4Bytes(60, "720p", 60, false) / base).toBeCloseTo(2);
+    expect(estimateMp4Bytes(60, "4k", 30, false) / base).toBeCloseTo(9);
+    for (const res of ["720p", "1080p", "4k"] as const) {
+      for (const fps of [30, 60] as const) {
+        expect((estimateMp4Bytes(10, res, fps, false) * 8) / 10).toBeLessThanOrEqual(defaultVideoBitrate(res, fps) * 1.05);
+      }
+    }
+    expect(estimateMp4Bytes(0, "1080p", 30)).toBe(0);
+    expect(estimateMp4Bytes(-5, "1080p", 30)).toBe(0);
   });
 
   it("writes the caption", () => {

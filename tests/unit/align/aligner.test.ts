@@ -135,6 +135,42 @@ describe("Aligner interface, progress and cancellation", () => {
     expect(audio.samples).toBe(original);
   });
 
+  it("alignInWorker warns and falls back to the main thread when the worker fails to load", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // the constructor throws (e.g. a CSP or bundler problem)
+      vi.stubGlobal(
+        "Worker",
+        class {
+          constructor() {
+            throw new Error("blocked by CSP");
+          }
+        },
+      );
+      expect(await alignInWorker(infoMap, audio)).toEqual(detail.sync);
+      expect(warn).toHaveBeenCalledWith("[align] worker unavailable, running on the main thread:", "blocked by CSP");
+
+      // the script 404s: onerror fires before the worker says anything
+      warn.mockClear();
+      vi.stubGlobal(
+        "Worker",
+        class {
+          onmessage: unknown = null;
+          onerror: ((e: { message: string; preventDefault(): void }) => void) | null = null;
+          postMessage() {
+            setTimeout(() => this.onerror?.({ message: "", preventDefault() {} }), 0);
+          }
+          terminate() {}
+        },
+      );
+      expect(await alignInWorker(infoMap, audio)).toEqual(detail.sync);
+      expect(warn).toHaveBeenCalledWith("[align] worker unavailable, running on the main thread:", "the worker script failed to load");
+    } finally {
+      vi.unstubAllGlobals();
+      warn.mockRestore();
+    }
+  });
+
   it("the worker entry answers an align request with progress and a result", async () => {
     const posted: AlignResponse[] = [];
     const scope = globalThis as unknown as { postMessage?: (m: AlignResponse) => void; onmessage?: ((e: { data: unknown }) => void) | null };

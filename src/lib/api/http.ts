@@ -8,7 +8,7 @@
 import type { ActivityItem, ProjectSummary } from "@/shared/domain";
 import type { InfoMap } from "@/shared/info-map";
 import type { AlignResult, AudioUploadResult, ExportResult, Job, JobKind, OpenProjectResult, ParseScoreResult } from "@/shared/jobs";
-import type { DisplaySettings } from "@/shared/project-file";
+import type { DisplaySettings, ProjectFile } from "@/shared/project-file";
 import { mergeAlignment, UNCERTAIN_THRESHOLD, type SyncState } from "@/shared/sync";
 import type {
   ActivityDto,
@@ -41,11 +41,14 @@ import { buildProjectFile, packProjectFile, renderMp4, unpackProjectFile } from 
 import { getJob, mirrorRemoteJob, runLocalJob, subscribeJob, type LocalJobHandle } from "@/lib/jobs/registry";
 import { defaultDisplay } from "@/lib/store/display-defaults";
 import { cacheAudio, evictAudio, getCachedAudio } from "./audio-cache";
-import { AuthRequiredError, isNotFound } from "./errors";
+import { AuthRequiredError, isNotFound, errorMessage } from "./errors";
 import { ensureExtension, fetchBytes, fetchJson, putWithProgress, request, scoreContentType, toArrayBuffer } from "./transport";
 import type { ApiClient, ExportMp4Options } from "./types";
 
 export const CREATED_WITH = "Orchestra Visualizer 0.1.0";
+
+/** Longest recording the browser will decode and export (matches the server cap). */
+const MAX_AUDIO_SECONDS = 2 * 60 * 60;
 
 /** Presigned GET URLs expire after 15 minutes; refresh them before that. */
 const URL_TTL_MS = 10 * 60_000;
@@ -87,8 +90,8 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
 
   /* ------------------------------ basics ------------------------------ */
 
-  const presign = (kind: UploadKind, filename: string, contentType: string, projectId?: string) =>
-    request<UploadTarget>("/uploads", { method: "POST", json: { kind, filename, contentType, projectId } satisfies UploadRequest });
+  const presign = (kind: UploadKind, filename: string, contentType: string, projectId?: string, bytes?: number) =>
+    request<UploadTarget>("/uploads", { method: "POST", json: { kind, filename, contentType, projectId, bytes } satisfies UploadRequest });
 
   async function getProject(id: string): Promise<ProjectDto | null> {
     try {
@@ -126,12 +129,12 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
     return infoMap;
   }
 
-  async function saveSync(id: string, sync: SyncState): Promise<ProjectDto> {
-    return (await request<ProjectResponse>(`/projects/${enc(id)}/sync`, { method: "PUT", json: sync })).project;
+  async function saveSync(id: string, sync: SyncState, options: { keepalive?: boolean } = {}): Promise<ProjectDto> {
+    return (await request<ProjectResponse>(`/projects/${enc(id)}/sync`, { method: "PUT", json: sync, keepalive: options.keepalive })).project;
   }
 
-  async function saveDisplay(id: string, display: DisplaySettings): Promise<ProjectDto> {
-    return (await request<ProjectResponse>(`/projects/${enc(id)}/display`, { method: "PUT", json: display })).project;
+  async function saveDisplay(id: string, display: DisplaySettings, options: { keepalive?: boolean } = {}): Promise<ProjectDto> {
+    return (await request<ProjectResponse>(`/projects/${enc(id)}/display`, { method: "PUT", json: display, keepalive: options.keepalive })).project;
   }
 
   /** The decoded recording: from the LRU, else downloaded and decoded. */
@@ -172,7 +175,7 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
     const span = to - from;
     const contentType = scoreContentType(filename);
     ctx.report(from, "Preparing upload");
-    const target = await presign("score", filename, contentType, projectId);
+    const target = await presign("score", filename, contentType, projectId, blob.size);
     await putWithProgress(target.uploadUrl, blob, contentType, (p) => ctx.report(from + p * span * 0.4, "Uploading score"), ctx.signal);
     ctx.report(from + span * 0.4, "Parsing score");
     const { job: remote } = await request<RegisterScoreResponse>(`/projects/${enc(projectId)}/score`, {
@@ -193,9 +196,12 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
     const buffer = await decodeAudioFile(blob instanceof File ? blob : await blob.arrayBuffer());
     cacheAudio(projectId, buffer);
     const peaks = peaksFromAudioBuffer(buffer);
+    if (buffer.duration > MAX_AUDIO_SECONDS) {
+      throw new Error(`Recordings longer than ${Math.round(MAX_AUDIO_SECONDS / 3600)} hours are not supported.`);
+    }
     const durationSec = Math.max(1, Math.round(buffer.duration));
     ctx.report(from + span * 0.2, "Uploading recording");
-    const target = await presign("audio", filename, contentType, projectId);
+    const target = await presign("audio", filename, contentType, projectId, blob.size);
     await putWithProgress(target.uploadUrl, blob, contentType, (p) => ctx.report(from + span * (0.2 + p * 0.7), "Uploading recording"), ctx.signal);
     ctx.report(from + span * 0.92, "Registering recording");
     await request<ProjectResponse>(`/projects/${enc(projectId)}/audio`, {
@@ -209,15 +215,24 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
   /** presign (kind export) → PUT → register in history. Progress spans [from, to]. */
   async function uploadExport(projectId: string, blob: Blob, filename: string, contentType: string, body: Omit<RegisterExportRequest, "key" | "filename" | "bytes">, ctx: JobContext, from: number, to: number): Promise<ExportResult> {
     const span = to - from;
-    ctx.report(from, "Uploading export");
-    const target = await presign("export", filename, contentType, projectId);
-    await putWithProgress(target.uploadUrl, blob, contentType, (p) => ctx.report(from + p * span * 0.85, "Uploading export"), ctx.signal);
-    ctx.report(from + span * 0.9, "Saving to history");
-    const { export: exported } = await request<{ export: ExportDto }>(`/projects/${enc(projectId)}/exports`, {
-      method: "POST",
-      json: { ...body, filename, key: target.key, bytes: blob.size } satisfies RegisterExportRequest,
-    });
-    return { filename, bytes: blob.size, url: URL.createObjectURL(blob), exportId: exported.id };
+    // The local download works even if the history upload fails (ADR 0010/0012):
+    // a real-time render or the user's own save path must never be thrown away.
+    const result: ExportResult = { filename, bytes: blob.size, url: URL.createObjectURL(blob) };
+    try {
+      ctx.report(from, "Uploading export");
+      const target = await presign("export", filename, contentType, projectId, blob.size);
+      await putWithProgress(target.uploadUrl, blob, contentType, (p) => ctx.report(from + p * span * 0.85, "Uploading export"), ctx.signal);
+      ctx.report(from + span * 0.9, "Saving to history");
+      const { export: exported } = await request<{ export: ExportDto }>(`/projects/${enc(projectId)}/exports`, {
+        method: "POST",
+        json: { ...body, filename, key: target.key, bytes: blob.size } satisfies RegisterExportRequest,
+      });
+      result.exportId = exported.id;
+    } catch (err) {
+      if (ctx.signal.aborted) throw err;
+      result.warnings = [`The file is ready to download, but it could not be saved to the export history: ${errorMessage(err, "upload failed")}.`];
+    }
+    return result;
   }
 
   /* ------------------------------ client ------------------------------ */
@@ -274,7 +289,7 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
       return project;
     },
 
-    getProjectUrls: (id) => getProjectUrls(id),
+    getProjectUrls: (id, options) => getProjectUrls(id, options?.fresh ?? false),
     fetchInfoMap,
     saveSync,
     saveDisplay,
@@ -358,15 +373,18 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
         ctx.report(0.6, "Packing score, audio and markers");
         const display = project.display ?? (infoMap ? defaultDisplay(infoMap) : null);
         if (!display) throw new Error("The score has not been parsed yet");
-        const projectFile = buildProjectFile({
-          infoMap,
-          sync: project.sync,
-          display,
-          scoreFilename: project.scoreName,
-          audioFilename: audioBytes ? (project.recordingName ?? "audio.mp3") : null,
-          audioSource: audioBytes ? "uploaded" : "generated",
-          createdWith: CREATED_WITH,
-        });
+        const projectFile: ProjectFile = {
+          ...buildProjectFile({
+            infoMap,
+            sync: project.sync,
+            display,
+            scoreFilename: project.scoreName,
+            audioFilename: audioBytes ? (project.recordingName ?? "audio.mp3") : null,
+            audioSource: audioBytes ? "uploaded" : "generated",
+            createdWith: CREATED_WITH,
+          }),
+          meta: { title: project.title, subtitle: project.subtitle ?? null, composer: project.composer, movement: project.movement },
+        };
         const packed = packProjectFile({
           project: projectFile,
           scoreBytes,
@@ -385,26 +403,47 @@ export function createHttpApi(options: HttpApiOptions = {}): ApiClient {
         ctx.report(0.02, "Reading project file");
         const { project: projectFile, scoreBytes, audioBytes } = unpackProjectFile(new Uint8Array(await file.arrayBuffer()));
         const fallbackTitle = file.name.replace(/\.ovproj$/i, "").trim();
-        const title = ((projectFile as { title?: unknown }).title as string | undefined) || fallbackTitle || "Imported project";
+        const title = projectFile.meta?.title || fallbackTitle || "Imported project";
         ctx.report(0.06, "Creating project");
         const { project } = await request<ProjectResponse>("/projects", { method: "POST", json: { title } satisfies ProjectCreate });
-        const scoreFilename = projectFile.score.filename || "score.musicxml";
-        const scoreBlob = new Blob([toArrayBuffer(scoreBytes)], { type: scoreContentType(scoreFilename) });
-        await uploadAndParseScore(project.id, scoreBlob, scoreFilename, ctx, 0.08, 0.6);
-        const hasRecording = Boolean(audioBytes && audioBytes.byteLength > 0);
-        if (audioBytes && hasRecording) {
-          const audioFilename = projectFile.audio.filename || "audio.mp3";
-          const audioBlob = new Blob([toArrayBuffer(audioBytes)], { type: "audio/mpeg" });
-          await uploadAndRegisterAudio(project.id, audioBlob, audioFilename, "audio/mpeg", ctx, 0.6, 0.88);
+        try {
+          const scoreFilename = projectFile.score.filename || "score.musicxml";
+          const scoreBlob = new Blob([toArrayBuffer(scoreBytes)], { type: scoreContentType(scoreFilename) });
+          const parsed = await uploadAndParseScore(project.id, scoreBlob, scoreFilename, ctx, 0.08, 0.6);
+          if (projectFile.meta && (projectFile.meta.title || projectFile.meta.composer || projectFile.meta.movement)) {
+            // the parse job may have taken the score's own names; the file's names win
+            await request<ProjectResponse>(`/projects/${enc(project.id)}`, {
+              method: "PATCH",
+              json: { title: projectFile.meta.title || undefined, subtitle: projectFile.meta.subtitle ?? undefined, composer: projectFile.meta.composer || undefined, movement: projectFile.meta.movement || undefined } satisfies ProjectPatch,
+            });
+          }
+          const hasRecording = Boolean(audioBytes && audioBytes.byteLength > 0);
+          if (audioBytes && hasRecording) {
+            const audioFilename = projectFile.audio.filename || "audio.mp3";
+            const audioBlob = new Blob([toArrayBuffer(audioBytes)], { type: "audio/mpeg" });
+            await uploadAndRegisterAudio(project.id, audioBlob, audioFilename, "audio/mpeg", ctx, 0.6, 0.88);
+          }
+          if (projectFile.sync && hasRecording) {
+            // Measure numbers are playback order with repeats expanded; a file
+            // whose alignment was made for a different measure count cannot be
+            // trusted bar by bar. Keep manual markers that are still in range.
+            const measures = parsed.measures;
+            const auto = projectFile.sync.auto.length === measures ? projectFile.sync.auto : [];
+            const manual = projectFile.sync.manual.filter((m) => m.measure >= 1 && m.measure <= measures);
+            if (auto.length > 0 || manual.length > 0) {
+              ctx.report(0.9, "Restoring alignment");
+              await saveSync(project.id, { ...projectFile.sync, auto, manual, averageConfidence: auto.length ? projectFile.sync.averageConfidence : 0 });
+            }
+          }
+          ctx.report(0.95, "Restoring display settings");
+          await saveDisplay(project.id, projectFile.display);
+          invalidate(project.id);
+          return { projectId: project.id, hasRecording };
+        } catch (err) {
+          // do not leave a half-imported project behind
+          await request(`/projects/${enc(project.id)}`, { method: "DELETE" }).catch(() => {});
+          throw err;
         }
-        if (projectFile.sync && hasRecording) {
-          ctx.report(0.9, "Restoring alignment");
-          await saveSync(project.id, projectFile.sync);
-        }
-        ctx.report(0.95, "Restoring display settings");
-        await saveDisplay(project.id, projectFile.display);
-        invalidate(project.id);
-        return { projectId: project.id, hasRecording };
       });
     },
 
