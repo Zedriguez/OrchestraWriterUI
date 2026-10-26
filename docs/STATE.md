@@ -53,8 +53,11 @@ Status values: not started · in progress · in review · done · blocked
   Firefox has no AAC encoder, so exports there are video-only with a warning.
   Safari and Firefox have not been exercised yet.
 - Alignment confidence thresholds were tuned on synthetic audio only.
-- In "parts" label mode with many parts, label columns can overflow the top
-  of the stage (pre-existing placement limit).
+- In "parts" label mode with 64 parts, 32 labels per side overlap (about
+  17 px apart); a compact "name + dynamic" label for crowded columns is the
+  follow-up.
+- Better Auth's production rate limit trusts a client-supplied
+  `x-forwarded-for`; set `advanced.ipAddress` for the App Runner proxy.
 
 ## Later-phase backlog (not in scope)
 

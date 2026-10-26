@@ -35,7 +35,12 @@ Append-only. Newest entry at the bottom. Written by `/handoff`.
 
 **Open questions / blockers**
 - Safari and Firefox untested (WebCodecs/AAC); alignment confidence tuned on
-  synthetic audio only; transcription pipeline kept but not surfaced.
+  synthetic audio only; transcription pipeline kept behind PIPELINE_ENABLED.
+- Better Auth's sign-in rate limit keys on `x-forwarded-for` as sent by the
+  client; behind App Runner, configure `advanced.ipAddress` for the proxy.
+- Typing into a server-rendered form before hydration is wiped (sign-in on a
+  slow connection); consider disabling the form until hydrated.
+- Password reset needs an email provider (STATE.md question 8).
 - `@breezystack/lamejs` (LGPL-3.0) is a devDependency used only by
   `scripts/make-fixtures.ts` to encode the committed demo MP3.
 - `hono/vercel` is deprecated in Hono 4 in favor of `@hono/vercel`.
@@ -47,8 +52,12 @@ Append-only. Newest entry at the bottom. Written by `/handoff`.
 
 **Verified by**
 - `npm run lint`, `npx tsc --noEmit`, `npm test` (289), `npm run test:api`
-  (57 against docker compose), `npm run test:e2e` (Chromium, see the e2e
-  entry below), `npm run build`.
+  (57 against docker compose), `npm run build`, and `npm run test:e2e`
+  (12 Playwright tests, Chromium) against both `npm run dev` and the
+  production build (`npm run start` with the local-stack env). One
+  intermittent: on the first run after a cold production start, the recording
+  workflow's Preview step saw playback stop after a few seconds (both
+  attempts); isolated and repeated full runs passed. Not reproduced since.
 - Manual run in Chrome against `npm run dev` + docker compose: sign-up/sign-in,
   New project → Import (demo score parsed: 14 parts, 56 bars, repeat warning;
   demo MP3 uploaded with real peaks) → Sync (auto-alignment 99 % average, bar 1
