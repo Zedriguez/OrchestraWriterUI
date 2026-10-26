@@ -1,68 +1,92 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check } from "lucide-react";
+import { api, errorMessage } from "@/lib/api";
 import { useProject } from "@/lib/store/project";
+import { usePlayback } from "@/lib/store/playback";
 import { PageHeader, Dot } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { NeedsScore } from "@/components/music/NeedsScore";
 import { ProjectFileCard } from "./ProjectFileCard";
 import { VideoCard } from "./VideoCard";
-import { ExportHistory, mockHistory } from "./ExportHistory";
-import { slugify, type HistoryRow } from "./shared";
+import { ExportHistory, type HistoryState } from "./ExportHistory";
+import { slugify } from "./shared";
 
 export function ExportPage({ projectId }: { projectId: string }) {
   const summary = useProject((s) => s.summary);
-  const infoMap = useProject((s) => s.infoMap)!;
-
-  // A project created at /projects/new has no summary in the mock; fall back to the info map.
-  const title = summary?.title ?? "Untitled project";
-  const movement = summary?.movement ?? null;
-  const parts = summary?.parts ?? infoMap.instruments.length;
-  const durationSec = summary?.durationSec ?? infoMap.duration;
+  const infoMap = useProject((s) => s.infoMap);
   const hasRecording = summary?.hasRecording ?? false;
-  const slug = slugify(title);
+  // the recording's own length once the shared engine has loaded it
+  const recordingSec = usePlayback((s) => (hasRecording && s.engine && s.ready && s.duration > 0 ? s.duration : null));
 
-  const [history, setHistory] = useState<HistoryRow[]>(() => mockHistory(slug));
-  const record = useCallback((row: HistoryRow) => setHistory((h) => [row, ...h]), []);
+  const [history, setHistory] = useState<HistoryState>({ status: "loading", rows: [] });
+  const fetchHistory = useCallback(async () => {
+    try {
+      const rows = await api.listExports(projectId);
+      setHistory({ status: "ready", rows });
+    } catch (err) {
+      setHistory((h) => ({ status: "error", rows: h.rows, error: errorMessage(err, "Export history could not be loaded") }));
+    }
+  }, [projectId]);
+  useEffect(() => {
+    void fetchHistory();
+  }, [fetchHistory]);
+  const reloadHistory = useCallback(() => {
+    setHistory((h) => ({ ...h, status: h.rows.length > 0 ? "ready" : "loading" }));
+    void fetchHistory();
+  }, [fetchHistory]);
+
+  if (!summary || !infoMap) return <NeedsScore projectId={projectId} title="Export" />;
+
+  const slug = slugify(summary.title);
+  const generatedSec = infoMap.duration;
+  const uploadedSec = recordingSec ?? summary.durationSec;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Step 5 of 5 · Export"
-        title="Take it with you"
+        title="Export"
         meta={
           <>
             <span>
-              {title}
-              {summary?.subtitle && <em className="font-serif"> {summary.subtitle}</em>}
+              {summary.title}
+              {summary.subtitle && <em className="font-serif"> {summary.subtitle}</em>}
             </span>
-            {movement && (
+            {summary.movement && (
               <>
                 <Dot />
-                <span>{movement}</span>
+                <span>{summary.movement}</span>
               </>
             )}
             <Dot />
-            <span className="tnum">{parts} parts</span>
+            <span className="tnum">{summary.parts} parts</span>
           </>
         }
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ProjectFileCard projectId={projectId} defaultName={slug} onComplete={record} />
-        <VideoCard projectId={projectId} defaultName={slug} durationSec={durationSec} hasRecording={hasRecording} onComplete={record} />
+        <ProjectFileCard projectId={projectId} defaultName={slug} onExported={reloadHistory} />
+        <VideoCard
+          projectId={projectId}
+          defaultName={slug}
+          hasRecording={hasRecording}
+          durations={{ uploaded: uploadedSec, generated: generatedSec }}
+          onExported={reloadHistory}
+        />
       </div>
 
-      <ExportHistory rows={history} />
+      <ExportHistory state={history} onRetry={reloadHistory} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
         <Button variant="ghost" href={`/projects/${projectId}/preview`} leading={<ArrowLeft size={14} />}>
           Back to Preview
         </Button>
         <Button variant="outline" href="/library" leading={<Check size={14} />}>
-          Done · Back to library
+          Done
         </Button>
       </div>
     </div>
   );
 }
+

@@ -21,6 +21,7 @@ export function MeasureTimeline({
   selected,
   onSelect,
   onSeek,
+  labelOf = String,
   className,
 }: {
   peaks: number[];
@@ -34,6 +35,8 @@ export function MeasureTimeline({
   selected: number | null;
   onSelect: (m: number) => void;
   onSeek: (t: number) => void;
+  /** "41 (33)" for bars whose printed number differs */
+  labelOf?: (measure: number) => string;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -43,7 +46,8 @@ export function MeasureTimeline({
   const x = (t: number) => ((t - t0) / span) * 100;
 
   const bars = useMemo(() => {
-    const i0 = Math.floor((t0 / duration) * peaks.length);
+    if (!(duration > 0) || peaks.length === 0) return [];
+    const i0 = Math.max(0, Math.floor((t0 / duration) * peaks.length));
     const i1 = Math.min(peaks.length, Math.ceil((t1 / duration) * peaks.length));
     const slice = peaks.slice(i0, i1);
     return slice.map((p, i) => ({ x: (i / slice.length) * 100, h: Math.max(6, p * 100), w: (100 / slice.length) * 0.6 }));
@@ -94,7 +98,7 @@ export function MeasureTimeline({
         ))}
         {/* waveform */}
         <svg className="absolute inset-x-0 top-7 bottom-5" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          <g fill="rgba(29,26,22,0.3)">
+          <g fill="var(--ink)" fillOpacity={0.3}>
             {bars.map((b, i) => (
               <rect key={i} x={b.x} y={(100 - b.h) / 2} width={b.w} height={b.h} rx="0.3" />
             ))}
@@ -105,7 +109,7 @@ export function MeasureTimeline({
           <div key={m.n} className="absolute top-0 bottom-0" style={{ left: `${m.x0}%` }}>
             <div className={cx("absolute top-0 bottom-0 w-px", m.manual ? "bg-brass w-[2px] shadow-[0_0_6px_var(--brass-glow)]" : "bg-ink/25")} />
             {m.manual && <div className="absolute -left-[5px] top-0 h-0 w-0 border-x-[6px] border-t-[7px] border-x-transparent border-t-brass" />}
-            <span className={cx("tnum absolute left-1.5 top-1 text-[11px] font-medium", m.n === selected ? "text-ink" : "text-ink-3")}>{m.n}</span>
+            <span className={cx("tnum absolute left-1.5 top-1 text-[11px] font-medium", m.n === selected ? "text-ink" : "text-ink-3")}>{labelOf(m.n)}</span>
             <span className="tnum absolute left-1.5 bottom-1 text-[10px] text-ink-4">{formatTime(aligned[m.n - 1].startSec, true)}</span>
             <span
               className="absolute right-1.5 top-1 rounded-full px-1.5 text-[10px] font-semibold"
@@ -121,7 +125,7 @@ export function MeasureTimeline({
         )}
       </div>
       <p className="mt-1.5 text-[11.5px] text-ink-4">
-        Click a measure to select it · double-click to move the playhead · shift-drag to scrub. Window {formatTime(t0)}–{formatTime(t1)}.
+        Click a bar to select it · double-click to move the playhead · shift-drag to scrub · {formatTime(t0)}–{formatTime(t1)}
       </p>
     </div>
   );

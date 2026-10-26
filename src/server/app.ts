@@ -8,7 +8,6 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
-import { logger } from "hono/logger";
 import { auth } from "./auth";
 import { env } from "./config/env";
 import { query } from "./db/client";
@@ -31,7 +30,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 export function createApp() {
   const app = new Hono().basePath("/api");
 
-  if (env.isDevelopment) app.use(logger());
+  // Request logging: Next.js already prints one line per request in dev.
 
   // A frontend on another origin needs CORS with credentials so the session
   // cookie travels. The Next.js app itself is same-origin and needs none of this.

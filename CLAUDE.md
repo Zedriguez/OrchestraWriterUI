@@ -41,22 +41,35 @@ Preview can go back to Customize, or to Sync when a recording exists.
 
 ## Stack
 
-Next.js 16 (App Router) + TypeScript + Tailwind v4, zustand, lucide-react.
-See ADR 0004 (stack), 0005 (visual direction), 0006 (front-end architecture).
-Rendering: Canvas 2D behind the `GlowRenderer` interface (PixiJS/Three may
-replace it). Fonts: Lora + Inter (next/font), Bravura Text (CDN) for pp–fff.
+Next.js 16 (App Router) + TypeScript + Tailwind v4, zustand, radix-ui + sonner
+(UI primitives), lucide-react. The API is a Hono app in `src/server/` mounted
+at `/api` (Better Auth sessions, Postgres via `pg`, S3 presigned uploads); it
+runs inside the same Next.js process (ADR 0007). Score parsing is an
+isomorphic module (ADR 0008); alignment runs in a Web Worker (ADR 0009); MP4
+export runs in the browser with WebCodecs (ADR 0010); `.ovproj` is a zip
+(ADR 0012). Rendering: Canvas 2D behind the `GlowRenderer` interface.
+Fonts: Lora + Inter (next/font), Bravura Text (CDN) for pp–fff.
 
 ```
-dev:    npm run dev        # http://localhost:3000
+stack:  docker compose up -d        # Postgres 17 (5433) + S3Mock (9090); needed by the API
+dev:    npm run dev                 # http://localhost:3000; migrations run on boot
 lint:   npm run lint
-types:  npx tsc --noEmit   # run `npx next typegen` first on a fresh clone
+types:  npm run typecheck           # next typegen + tsc --noEmit
+unit:   npm test                    # vitest: src/**/*.test.ts(x), tests/unit
+api:    npm run test:api            # tests/api against docker compose
+e2e:    npm run test:e2e            # Playwright (Chromium) against the dev server
 build:  npm run build
+db:     npm run db:migrate | db:seed | db:ping
+mock:   NEXT_PUBLIC_API_MOCK=1 npm run dev   # front end on the in-memory mock API
 ```
 
-Source layout: `src/app` routes in `(auth)`, `(app)`, `(workflow)` groups;
-`src/shared` contracts (future shared package); `src/lib` api / mock / store /
-visualizer; `src/components` by area, `ui` primitives, `music` transport and
-score, `visualizer` stage.
+Source layout: `src/app` routes in `(auth)`, `(app)`, `(workflow)` groups plus
+`api/[[...route]]`; `src/server` the Hono API (routes → services → db/storage);
+`src/shared` contracts shared by server and browser (info map, project file,
+sync, API DTOs, the MusicXML parser); `src/lib` api client, auth, stores, jobs
+registry, score helpers, align, audio, export, visualizer; `src/components`
+by area, `ui` primitives, `music` transport and score, `visualizer` stage.
+Tests: `tests/unit`, `tests/api`, `tests/e2e`; fixtures in `fixtures/`.
 
 ## Vocabulary
 
@@ -84,9 +97,11 @@ score, `visualizer` stage.
 
 ## Where things live
 
-- `.claude/rules/` – topic rules, auto-loaded by file path
+- `.claude/rules/` – topic rules, auto-loaded by file path (incl. `server.md`)
 - `.claude/agents/` – subagents (planner, reviewer, score-engineer, visual-engineer)
 - `.claude/skills/` – reference knowledge Claude loads when relevant
 - `.claude/commands/` – `/handoff`, `/status`, `/scope-check`
 - `.claude/hooks/` – scripts wired in `.claude/settings.json`
 - `docs/spec/` – the requirements and design spec, as markdown
+- `docs/plan/backend-integration.md` – the integration plan: API table, module signatures, decluttering rules
+- `docs/backend/` – server README and API reference; `docs/research/` – library research

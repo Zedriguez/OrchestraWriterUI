@@ -10,8 +10,14 @@ import { cx } from "@/lib/utils/format";
 
 export function UserMenu({ onStage }: { onStage?: boolean }) {
   const user = useSession((s) => s.user);
+  const status = useSession((s) => s.status);
   const signOut = useSession((s) => s.signOut);
   const router = useRouter();
+
+  if (status === "loading") {
+    // same footprint as the avatar so the header does not shift when the session arrives
+    return <span className="shimmer h-9 w-9 shrink-0 rounded-full" aria-hidden />;
+  }
 
   if (!user) {
     return (
@@ -26,7 +32,7 @@ export function UserMenu({ onStage }: { onStage?: boolean }) {
       align="end"
       className="w-64"
       trigger={
-        <button type="button" className="focus-round rounded-full" aria-label="Account menu">
+        <button type="button" className="focus-round shrink-0 rounded-full" aria-label="Account menu">
           <Avatar initials={user.initials} />
         </button>
       }
@@ -45,8 +51,9 @@ export function UserMenu({ onStage }: { onStage?: boolean }) {
       <MenuSeparator />
       <MenuItem
         icon={<LogOut size={15} />}
-        onSelect={() => {
-          signOut();
+        onSelect={async () => {
+          // the cookie must be gone before /sign-in, or the proxy bounces back to /library
+          await signOut();
           router.push("/sign-in");
         }}
       >

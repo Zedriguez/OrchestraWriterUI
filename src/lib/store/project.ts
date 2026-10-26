@@ -88,6 +88,8 @@ const inflight = new Set<Promise<void>>();
 let editVersion = 0;
 /** bumps on every load so stale responses are ignored */
 let loadSeq = 0;
+/** info_map_key of the info map in the store; a new key on refresh means the score was replaced */
+let loadedInfoMapKey: string | null = null;
 
 function clearTimers() {
   for (const kind of Object.keys(timers) as SaveKind[]) {
@@ -219,6 +221,7 @@ export const useProject = create<ProjectState>((set, get) => {
       // Flush the previous project's edits before switching.
       if (s.projectId && s.projectId !== id && (pendingKinds.size > 0 || inflight.size > 0)) await saveNow();
       clearTimers();
+      loadedInfoMapKey = null;
       const seq = ++loadSeq;
       const fresh = (): boolean => seq === loadSeq && get().projectId === id;
       set({
@@ -248,6 +251,7 @@ export const useProject = create<ProjectState>((set, get) => {
         if (project.infoMapKey) {
           infoMap = await api.fetchInfoMap(id);
           if (!fresh()) return;
+          loadedInfoMapKey = project.infoMapKey;
         }
         let audioUrl: string | null = null;
         if (project.hasRecording) {
@@ -294,9 +298,10 @@ export const useProject = create<ProjectState>((set, get) => {
         }
         const s = get();
         const patch: Partial<ProjectState> = { loading: false, summary: summaryOf(project), error: null };
-        if (project.infoMapKey && !s.infoMap) {
+        if (project.infoMapKey && (!s.infoMap || project.infoMapKey !== loadedInfoMapKey)) {
           patch.infoMap = await api.fetchInfoMap(id);
           if (seq !== loadSeq || get().projectId !== id) return;
+          loadedInfoMapKey = project.infoMapKey;
         }
         const infoMap = patch.infoMap ?? s.infoMap;
         if (!pendingKinds.has("sync")) patch.sync = project.sync;
