@@ -118,3 +118,26 @@ export function measureAtRecordingTime(aligned: MeasureAlignment[], t: number): 
   }
   return aligned[lo].n;
 }
+
+/* ------------------------------------------------------------------ */
+/* Alignment contract (see .claude/skills/score-audio-alignment)        */
+/* ------------------------------------------------------------------ */
+
+/** Mono PCM of the recording, as decoded by the browser. */
+export interface AlignAudio {
+  sampleRate: number;
+  samples: Float32Array;
+  durationSec: number;
+}
+
+export type AlignProgress = (progress: number, message: string) => void;
+
+/**
+ * align(infoMap, audio) -> { measures: [{ n, startSec, confidence }], method }.
+ * Implementations live in src/lib/align/. Manual markers are merged separately
+ * with mergeAlignment(); the aligner never sees them.
+ */
+export interface Aligner {
+  readonly method: string;
+  align(infoMap: import("./info-map").InfoMap, audio: AlignAudio, onProgress?: AlignProgress, signal?: AbortSignal): Promise<SyncState>;
+}

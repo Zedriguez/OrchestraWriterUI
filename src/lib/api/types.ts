@@ -1,5 +1,21 @@
-import type { AlignResult, ExportResult, Job, ParseScoreResult } from "@/shared/jobs";
-import type { ProjectSummary } from "@/shared/domain";
+import type { ActivityItem, ProjectSummary } from "@/shared/domain";
+import type { InfoMap } from "@/shared/info-map";
+import type { AlignResult, AudioUploadResult, ExportResult, Job, OpenProjectResult, ParseScoreResult } from "@/shared/jobs";
+import type { DisplaySettings } from "@/shared/project-file";
+import type { SyncState } from "@/shared/sync";
+import type {
+  ExportDto,
+  ProfileDto,
+  ProfileUpdate,
+  ProgramCreate,
+  ProgramDto,
+  ProgramPatch,
+  ProjectCreate,
+  ProjectDto,
+  ProjectPatch,
+  ProjectUrls,
+  UsageDto,
+} from "@/shared/api";
 
 export interface ExportMp4Options {
   projectId: string;
@@ -10,19 +26,51 @@ export interface ExportMp4Options {
 }
 
 /**
- * Contract for the AWS job API (ADR 0004). The mock implementation in
- * `./mock.ts` simulates latency and progress; swap `api` in `./index.ts`
- * for the HTTP client when the services exist.
+ * The one client the pages talk to. `http.ts` implements it against the Hono
+ * API (uploads go straight to S3 with presigned URLs; alignment and exports
+ * run in the browser and persist their results through the API). `mock.ts`
+ * implements the same interface in memory for tests and design work.
  */
 export interface ApiClient {
+  // session & profile
+  getProfile(): Promise<ProfileDto | null>;
+  updateProfile(patch: ProfileUpdate): Promise<ProfileDto>;
+  deleteAccount(): Promise<void>;
+  getUsage(): Promise<UsageDto>;
+
+  // projects
   listProjects(): Promise<ProjectSummary[]>;
-  getProject(id: string): Promise<ProjectSummary | null>;
-  createProject(): Promise<{ id: string }>;
+  getProject(id: string): Promise<ProjectDto | null>;
+  createProject(input?: ProjectCreate): Promise<ProjectDto>;
+  updateProject(id: string, patch: ProjectPatch): Promise<ProjectDto>;
+  deleteProject(id: string): Promise<void>;
+  /** presign → PUT to S3 → register → mirror the server parse job */
   uploadScore(projectId: string, file: File): Promise<Job<ParseScoreResult>>;
-  uploadAudio(projectId: string, file: File): Promise<Job<void>>;
+  /** presign → PUT to S3 → decode for duration + peaks → register */
+  uploadAudio(projectId: string, file: File): Promise<Job<AudioUploadResult>>;
+  removeAudio(projectId: string): Promise<ProjectDto>;
+  getProjectUrls(id: string): Promise<ProjectUrls>;
+  fetchInfoMap(id: string): Promise<InfoMap>;
+  saveSync(id: string, sync: SyncState): Promise<void>;
+  saveDisplay(id: string, display: DisplaySettings): Promise<void>;
+
+  // processing (browser-side jobs that persist through the API)
   startAlignment(projectId: string): Promise<Job<AlignResult>>;
   exportMp4(options: ExportMp4Options): Promise<Job<ExportResult>>;
   exportProjectFile(projectId: string, filename: string): Promise<Job<ExportResult>>;
+  openProjectFile(file: File): Promise<Job<OpenProjectResult>>;
+  listExports(projectId: string): Promise<ExportDto[]>;
+  getExportDownloadUrl(exportId: string): Promise<string>;
+
+  // programs & activity
+  listPrograms(): Promise<ProgramDto[]>;
+  getProgram(id: string): Promise<{ program: ProgramDto; projects: ProjectSummary[] } | null>;
+  createProgram(input: ProgramCreate): Promise<ProgramDto>;
+  updateProgram(id: string, patch: ProgramPatch): Promise<ProgramDto>;
+  deleteProgram(id: string): Promise<void>;
+  listActivity(): Promise<ActivityItem[]>;
+
+  // jobs (registry-backed; see src/lib/jobs/registry.ts)
   getJob<T>(jobId: string): Job<T> | null;
   subscribeJob<T>(jobId: string, cb: (job: Job<T>) => void): () => void;
 }
