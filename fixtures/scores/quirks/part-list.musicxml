@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Part-list clues: empty part-name falls back to the part id; sections come from instrument-sound,
+  then the name, then MIDI channel 10, then the General MIDI program; part-abbreviation wins over the
+  built-in table. The Piano part has no notes (warning).
+-->
+<score-partwise version="4.0">
+  <work><work-title>Part List</work-title></work>
+  <identification><creator type="composer">Test Composer</creator></identification>
+  <part-list>
+    <part-group type="start" number="1"><group-symbol>bracket</group-symbol></part-group>
+    <score-part id="P1">
+      <part-name></part-name>
+      <score-instrument id="P1-I1"><instrument-name>Viola</instrument-name><instrument-sound>strings.viola</instrument-sound></score-instrument>
+    </score-part>
+    <score-part id="P2">
+      <part-name>Kit</part-name>
+      <midi-instrument id="P2-I1"><midi-channel>10</midi-channel><midi-program>1</midi-program></midi-instrument>
+    </score-part>
+    <score-part id="P3">
+      <part-name>Line 3</part-name>
+      <midi-instrument id="P3-I1"><midi-channel>3</midi-channel><midi-program>74</midi-program></midi-instrument>
+    </score-part>
+    <score-part id="P4">
+      <part-name>Piano</part-name>
+      <midi-instrument id="P4-I1"><midi-channel>4</midi-channel><midi-program>1</midi-program></midi-instrument>
+    </score-part>
+    <score-part id="P5"><part-name>Bass Clarinet</part-name></score-part>
+    <score-part id="P6">
+      <part-name>Timpani</part-name>
+      <part-abbreviation>Timp. (D–A)</part-abbreviation>
+      <score-instrument id="P6-I1"><instrument-name>Timpani</instrument-name><instrument-sound>drum.timpani</instrument-sound></score-instrument>
+    </score-part>
+    <part-group type="stop" number="1"/>
+  </part-list>
+  <part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note></measure></part>
+  <part id="P2"><measure number="1"><attributes><divisions>1</divisions></attributes><note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>4</duration><voice>1</voice><type>whole</type></note></measure></part>
+  <part id="P3"><measure number="1"><attributes><divisions>1</divisions></attributes><note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note></measure></part>
+  <part id="P4"><measure number="1"><attributes><divisions>1</divisions></attributes><note><rest measure="yes"/><duration>4</duration><voice>1</voice></note></measure></part>
+  <part id="P5"><measure number="1"><attributes><divisions>1</divisions></attributes><note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note></measure></part>
+  <part id="P6"><measure number="1"><attributes><divisions>1</divisions></attributes><note><pitch><step>D</step><octave>3</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note></measure></part>
+</score-partwise>

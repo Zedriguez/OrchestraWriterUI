@@ -1,9 +1,8 @@
 ---
 paths:
-  - "**/pages/**"
-  - "**/app/**"
-  - "**/components/**"
-  - "**/*.css"
+  - "src/app/**"
+  - "src/components/**"
+  - "src/app/globals.css"
 ---
 # UI conventions
 

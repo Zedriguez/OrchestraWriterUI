@@ -31,6 +31,8 @@ export type AudioSource = "uploaded" | "generated";
 export interface ProjectFile {
   version: 1;
   createdWith: string;
+  /** display names, so a renamed project survives a round trip (the score's own title is the fallback) */
+  meta?: { title?: string; subtitle?: string | null; composer?: string; movement?: string };
   score: { filename: string; musicxml: string };
   audio: { source: AudioSource; filename: string | null; mp3: string | null };
   /** optional cache; must be rebuildable from score */

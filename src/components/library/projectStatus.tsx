@@ -1,5 +1,6 @@
 import type { ProjectSummary } from "@/shared/domain";
 import { Chip } from "@/components/ui/Chip";
+import { formatTime } from "@/lib/utils/format";
 
 /** Where a card should take the director: broken/unfinished imports go back to Import. */
 export function projectHref(project: ProjectSummary): string {
@@ -48,8 +49,10 @@ export function statusDetailFor(project: ProjectSummary): string | undefined {
   return undefined;
 }
 
+/** "14 parts · 56 bars · 2:05"; empty until the score has been read. Durations are fractional seconds. */
 export function projectMeta(project: ProjectSummary): string {
-  const m = Math.floor(project.durationSec / 60);
-  const s = String(project.durationSec % 60).padStart(2, "0");
-  return `${project.parts} parts · ${project.measures} bars · ${m}:${s}`;
+  if (project.parts === 0 && project.measures === 0) return "";
+  const parts = `${project.parts} ${project.parts === 1 ? "part" : "parts"}`;
+  const bars = `${project.measures} ${project.measures === 1 ? "bar" : "bars"}`;
+  return `${parts} · ${bars} · ${formatTime(project.durationSec)}`;
 }

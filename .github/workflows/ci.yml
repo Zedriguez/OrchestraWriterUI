@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: Lint, typecheck, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  api:
+    name: API integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: orchestra
+          POSTGRES_DB: orchestra
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d orchestra"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      s3:
+        image: adobe/s3mock:latest
+        env:
+          COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: orchestra-audio
+        ports: ["9090:9090"]
+    env:
+      NODE_ENV: test
+      PIPELINE_ENABLED: "1"
+      DB_HOST: localhost
+      DB_PORT: "5433"
+      DB_NAME: orchestra
+      DB_USER: postgres
+      DB_PASSWORD: orchestra
+      DB_SSL: "false"
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      S3_AUDIO_BUCKET: orchestra-audio
+      S3_ENDPOINT: http://localhost:9090
+      S3_PUBLIC_ENDPOINT: http://localhost:9090
+      BETTER_AUTH_SECRET: ci-only-secret
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate && npm run db:seed
+      - run: npm run test:api
+
+  e2e:
+    name: End-to-end (Chromium)
+    runs-on: ubuntu-latest
+    needs: [check]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: orchestra
+          POSTGRES_DB: orchestra
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d orchestra"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      s3:
+        image: adobe/s3mock:latest
+        env:
+          COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: orchestra-audio
+        ports: ["9090:9090"]
+    env:
+      CI: "true"
+      DB_HOST: localhost
+      DB_PORT: "5433"
+      DB_NAME: orchestra
+      DB_USER: postgres
+      DB_PASSWORD: orchestra
+      DB_SSL: "false"
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      S3_AUDIO_BUCKET: orchestra-audio
+      S3_ENDPOINT: http://localhost:9090
+      S3_PUBLIC_ENDPOINT: http://localhost:9090
+      BETTER_AUTH_SECRET: ci-only-secret
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report

@@ -1,28 +1,20 @@
-import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import { Aurora } from "@/components/brand/Aurora";
+import { Button } from "@/components/ui/Button";
 
 export default function NotFound() {
   return (
-    <main className="relative flex-1 grid place-items-center overflow-hidden grain">
+    <main className="relative grid flex-1 place-items-center overflow-hidden grain">
       <Aurora />
-      <div className="relative z-10 text-center px-6">
-        <div className="flex justify-center mb-8">
+      <div className="relative z-10 px-6 text-center">
+        <div className="mb-8 flex justify-center">
           <Logo />
         </div>
-        <p className="eyebrow mb-3">Tacet</p>
-        <h1 className="display text-5xl md:text-6xl mb-4">
-          This page is <em>resting</em>
-        </h1>
-        <p className="text-ink-3 max-w-md mx-auto mb-8">
-          There is nothing on the stand here. The movement you are looking for may have been moved or renamed.
-        </p>
-        <Link
-          href="/library"
-          className="inline-flex items-center rounded-full bg-ink text-paper px-5 py-2.5 text-sm font-medium hover:opacity-90 transition"
-        >
+        <h1 className="display mb-3 text-[2rem] md:text-[2.4rem]">This page is resting</h1>
+        <p className="mx-auto mb-8 max-w-md text-ink-3">There is nothing here. It may have been moved or deleted.</p>
+        <Button href="/library" variant="primary">
           Back to your library
-        </Link>
+        </Button>
       </div>
     </main>
   );

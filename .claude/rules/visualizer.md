@@ -1,8 +1,10 @@
 ---
 paths:
-  - "**/visual*/**"
-  - "**/render*/**"
-  - "**/orchestra*/**"
+  - "src/lib/visualizer/**"
+  - "src/components/visualizer/**"
+  - "src/components/customize/**"
+  - "src/components/preview/**"
+  - "src/lib/audio/**"
 ---
 # The visualizer
 

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A one-beat pickup (implicit measure 0) becomes info-map measure 1 with a 1-beat length.
+  The second part over-fills written measure 2 (4 beats in 3/4): timing follows the first part and
+  the parser warns. Tempo 60.
+-->
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Oboe</part-name></score-part>
+    <score-part id="P2"><part-name>Bassoon</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="0" implicit="yes">
+      <attributes><divisions>1</divisions><time><beats>3</beats><beat-type>4</beat-type></time></attributes>
+      <sound tempo="60"/>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="1">
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>half</type><dot/></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>3</duration><voice>1</voice><type>half</type><dot/></note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="0" implicit="yes">
+      <attributes><divisions>1</divisions><time><beats>3</beats><beat-type>4</beat-type></time></attributes>
+      <note><rest/><duration>1</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="1">
+      <note><pitch><step>D</step><octave>3</octave></pitch><duration>3</duration><voice>1</voice><type>half</type><dot/></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>A</step><octave>2</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>

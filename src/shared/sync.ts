@@ -1,3 +1,5 @@
+import type { InfoMap } from "./info-map";
+
 /**
  * Score ↔ audio alignment at the measure level. Two clocks exist: score time
  * (from the info map) and recording time (the MP3). Name variables by which.
@@ -118,3 +120,62 @@ export function measureAtRecordingTime(aligned: MeasureAlignment[], t: number): 
   }
   return aligned[lo].n;
 }
+
+/* ------------------------------------------------------------------ */
+/* Alignment contract (see .claude/skills/score-audio-alignment)        */
+/* ------------------------------------------------------------------ */
+
+/** Mono PCM of the recording, as decoded by the browser. */
+export interface AlignAudio {
+  sampleRate: number;
+  samples: Float32Array;
+  durationSec: number;
+}
+
+export type AlignProgress = (progress: number, message: string) => void;
+
+/**
+ * align(infoMap, audio) -> { measures: [{ n, startSec, confidence }], method }.
+ * Implementations live in src/lib/align/. Manual markers are merged separately
+ * with mergeAlignment(); the aligner never sees them.
+ */
+export interface Aligner {
+  readonly method: string;
+  align(infoMap: import("./info-map").InfoMap, audio: AlignAudio, onProgress?: AlignProgress, signal?: AbortSignal): Promise<SyncState>;
+}
+
+/* ------------------------------------------------------------------ */
+/* Clock conversion (recording time ↔ score time)                      */
+/* ------------------------------------------------------------------ */
+
+export function recordingToScoreTime(infoMap: InfoMap, aligned: MeasureAlignment[], t: number): number {
+  if (aligned.length === 0) return t;
+  const n = measureAtRecordingTime(aligned, t);
+  const i = n - 1;
+  const a = aligned[i];
+  const next = aligned[i + 1];
+  const m = infoMap.measures[i];
+  if (!a || !m) return t;
+  const span = next ? next.startSec - a.startSec : m.duration;
+  const frac = span > 0 ? (t - a.startSec) / span : 0;
+  return m.startTime + Math.max(0, Math.min(1.2, frac)) * m.duration;
+}
+
+export function scoreToRecordingTime(infoMap: InfoMap, aligned: MeasureAlignment[], scoreT: number): number {
+  if (aligned.length === 0) return scoreT;
+  const ms = infoMap.measures;
+  let lo = 0;
+  let hi = ms.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (ms[mid].startTime <= scoreT) lo = mid;
+    else hi = mid - 1;
+  }
+  const m = ms[lo];
+  const a = aligned[lo];
+  const next = aligned[lo + 1];
+  const span = next ? next.startSec - a.startSec : m.duration;
+  const frac = m.duration > 0 ? (scoreT - m.startTime) / m.duration : 0;
+  return a.startSec + frac * span;
+}
+

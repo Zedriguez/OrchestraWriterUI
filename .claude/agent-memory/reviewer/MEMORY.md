@@ -1,0 +1,2 @@
+- [Backend integration scope conflict](project_backend_integration_scope.md): accounts, cloud storage and autosave built while CLAUDE.md calls them later phase; check for a recorded decision
+- [Recurring review findings](project_recurring_review_findings.md): upload caps, zip bombs, URL expiry, autosave race, MP4 memory, empty e2e, public /api/status

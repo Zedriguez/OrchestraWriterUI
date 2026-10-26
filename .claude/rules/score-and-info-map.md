@@ -1,10 +1,9 @@
 ---
-# Adjust these globs once the source layout exists.
 paths:
-  - "**/score/**"
-  - "**/musicxml/**"
-  - "**/info-map/**"
-  - "**/infomap/**"
+  - "src/shared/score/**"
+  - "src/lib/score/**"
+  - "src/server/services/projects*.ts"
+  - "fixtures/scores/**"
 ---
 # Score parsing and the information map
 

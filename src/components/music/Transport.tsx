@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import { AlertCircle, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { usePlayback } from "@/lib/store/playback";
 import { formatTime, cx } from "@/lib/utils/format";
 import { Button } from "@/components/ui/Button";
@@ -75,7 +75,12 @@ export function Transport({
   const rate = usePlayback((s) => s.rate);
   const muted = usePlayback((s) => s.muted);
   const loop = usePlayback((s) => s.loop);
+  const hasEngine = usePlayback((s) => s.engine !== null);
+  const ready = usePlayback((s) => s.ready);
+  const error = usePlayback((s) => s.error);
   const { toggle, seek, skip, setRate, toggleMute, toggleLoop } = usePlayback.getState();
+  const loading = hasEngine && !ready && !error;
+  const unavailable = hasEngine && !ready && !!error;
   const text = onStage ? "text-stage-text" : "text-ink";
   const muted2 = onStage ? "text-stage-text-2" : "text-ink-3";
 
@@ -95,9 +100,11 @@ export function Transport({
         <button
           type="button"
           onClick={toggle}
+          disabled={unavailable}
           aria-label={playing ? "Pause" : "Play"}
+          aria-busy={loading || undefined}
           className={cx(
-            "grid h-11 w-11 shrink-0 place-items-center rounded-full shadow-md transition-transform active:scale-95",
+            "grid h-11 w-11 shrink-0 place-items-center rounded-full shadow-md transition-transform active:scale-95 disabled:opacity-40 disabled:active:scale-100",
             onStage ? "bg-stage-text text-stage" : "bg-ink text-paper",
           )}
         >
@@ -139,6 +146,15 @@ export function Transport({
         </div>
       )}
     </div>
+    {(loading || error) && (
+      <p
+        role={error ? "alert" : "status"}
+        className={cx("mt-2 flex items-center gap-1.5 text-[12px]", error ? "text-danger" : muted2)}
+      >
+        {error && <AlertCircle size={13} aria-hidden className="shrink-0" />}
+        {error ?? "Loading audio…"}
+      </p>
+    )}
     </div>
   );
 }

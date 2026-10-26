@@ -39,11 +39,19 @@ export interface Instrument {
   shortName: string;
   section: Section;
   notes: Note[];
+  /**
+   * Chromatic transposition from written to sounding pitch (MusicXML
+   * <transpose>, e.g. -2 for a B-flat clarinet). Absent or 0 for concert
+   * pitch instruments. Display keeps written pitch; audio and alignment add it.
+   */
+  transpose?: number;
 }
 
 export interface MeasureInfo {
-  /** 1-based */
+  /** 1-based index in playback order (repeats expanded) */
   number: number;
+  /** printed bar number when it differs from `number` (after a repeat) */
+  label?: string;
   /** seconds, score time */
   startTime: number;
   /** seconds */

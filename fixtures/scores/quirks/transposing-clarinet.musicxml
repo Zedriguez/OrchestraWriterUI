@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Clarinet in B-flat: the info map keeps the WRITTEN pitch (D5 = 74), not the sounding C5. Name uses a numeric character reference. -->
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1">
+      <part-name>Clarinet in B&#x266D;</part-name>
+      <part-abbreviation>Cl. (B&#x266D;)</part-abbreviation>
+      <score-instrument id="P1-I1"><instrument-name>B&#x266D; Clarinet</instrument-name><instrument-sound>wind.reed.clarinet.bflat</instrument-sound></score-instrument>
+      <midi-instrument id="P1-I1"><midi-channel>1</midi-channel><midi-program>72</midi-program></midi-instrument>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>2</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <transpose><diatonic>-1</diatonic><chromatic>-2</chromatic></transpose>
+      </attributes>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>F</step><alter>1</alter><octave>5</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>

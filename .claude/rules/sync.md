@@ -1,7 +1,8 @@
 ---
 paths:
-  - "**/sync/**"
-  - "**/align*/**"
+  - "src/lib/align/**"
+  - "src/components/sync/**"
+  - "src/shared/sync.ts"
 ---
 # Score-to-audio sync
 

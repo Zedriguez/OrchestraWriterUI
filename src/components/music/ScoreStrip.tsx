@@ -4,10 +4,12 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { InfoMap } from "@/shared/info-map";
 import { BRIGHTNESS_LADDER } from "@/shared/dynamics";
-import { measureDynamic } from "@/lib/mock/info-map";
+import { confidenceBand } from "@/shared/sync";
+import { measureDynamic } from "@/lib/score/segments";
 import { cx } from "@/lib/utils/format";
 import { Dyn } from "./Dyn";
 import { Toggle } from "@/components/ui/Toggle";
+import { barNumber } from "./bars";
 
 const MEASURES_PER_PAGE = 8;
 
@@ -15,6 +17,8 @@ const MEASURES_PER_PAGE = 8;
  * Schematic score viewer: one staff per part, note activity per measure,
  * current-measure highlight, click a measure to start playback, page
  * navigation independent of the playing measure, and a Follow toggle.
+ * Headers show the printed bar number (`MeasureInfo.label`) when a repeat
+ * makes it differ from the playback index.
  * Engraved notation (OSMD / Verovio) slots in here later.
  */
 export function ScoreStrip({
@@ -83,8 +87,16 @@ export function ScoreStrip({
           </button>
         </div>
         <div className="flex items-center gap-2 text-[12px] text-ink-3">
-          Follow
-          <Toggle size="sm" checked={follow} onChange={(v) => { setFollow(v); if (v) setManualPage(null); }} />
+          <span aria-hidden>Follow</span>
+          <Toggle
+            size="sm"
+            ariaLabel="Follow playback"
+            checked={follow}
+            onChange={(v) => {
+              setFollow(v);
+              if (v) setManualPage(null);
+            }}
+          />
         </div>
       </div>
 
@@ -94,6 +106,7 @@ export function ScoreStrip({
           <div />
           {measures.map((m) => {
             const conf = confidence?.get(m);
+            const label = infoMap.measures[m - 1]?.label ?? String(m);
             return (
               <button
                 key={m}
@@ -103,14 +116,12 @@ export function ScoreStrip({
                   "tnum relative h-7 text-[11px] font-medium transition-colors hover:bg-paper-3",
                   m === currentMeasure ? "text-ink" : "text-ink-3",
                 )}
-                aria-label={`Play from measure ${m}`}
+                aria-label={`Play from bar ${barNumber(infoMap, m)}`}
+                aria-current={m === currentMeasure ? "true" : undefined}
               >
-                {m}
+                {label}
                 {conf !== undefined && (
-                  <span
-                    className="absolute left-1 right-1 bottom-0 h-[3px] rounded-full"
-                    style={{ background: conf >= 90 ? "var(--conf-high)" : conf >= 60 ? "var(--conf-mid)" : "var(--conf-low)" }}
-                  />
+                  <span className="absolute left-1 right-1 bottom-0 h-[3px] rounded-full" style={{ background: confidenceBand(conf).token }} aria-hidden />
                 )}
               </button>
             );
@@ -138,7 +149,7 @@ export function ScoreStrip({
                     type="button"
                     onClick={() => onSeekMeasure(m)}
                     className={cx("relative h-10 border-l border-line transition-colors hover:bg-paper-3", active && "bg-brass-soft")}
-                    aria-label={`${inst.name}, measure ${m}`}
+                    aria-label={`${inst.name}, bar ${barNumber(infoMap, m)}`}
                   >
                     {/* staff lines */}
                     <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden>
