@@ -1,59 +1,101 @@
 # Orchestra Visualizer
 
-Shows which parts of an orchestra are playing, and how loud the score says
-they are, while a recording plays. Brightness = written dynamic, color =
-section. Upload a MusicXML score and an optional MP3, check the sync, set up
-the display, preview, export a project file or an MP4.
+**Team:** Megala Sivasankar · Lucas Sasaya · Valiantsin (Val) Kasabrukhau ·
+Xuerui (Sherry) He · Zehavi Rodriguez · Stella Wang
 
-One Next.js app: the pages, and the API (Hono + Better Auth + Postgres + S3)
-mounted at `/api`. Score parsing runs on the server; alignment and MP4 export
-run in the browser. See `docs/decisions/` for the why.
+A web app that shows which parts of an orchestra are playing, and how loud the
+score says they are, while a recording plays. You upload a MusicXML score and,
+if you have one, an MP3 of a performance. The app lines the score up with the
+recording, lights up each part on a labeled orchestra seating plan, and lets
+you export the result as a project file or an MP4 with audio.
+
+The rule behind the display: **the light shows the written dynamic in the
+score, not the loudness of the recording.** Brightness is the dynamic (pp to
+fff) and color is the section (strings, woodwinds, brass, percussion). We built
+it for listeners who don't read scores, so they can follow a symphony, and for
+musicians who need to learn quickly who plays what before a rehearsal.
+
+The workflow is **Import → Sync → Customize → Preview → Export**. Sync only
+appears when you upload a recording; without one, the app plays audio it
+synthesizes from the score.
+
+See [SPEC.md](SPEC.md) for the specification and architecture, and
+[MS1-PROGRESS.md](MS1-PROGRESS.md) for the Milestone 1 report.
+
+## Set up
+
+Requirements: Node.js 20+, npm, and Docker (for Postgres and a local S3).
+
+```bash
+git clone https://github.com/vkasabrukhau/OrchestraWriterUI.git
+cd OrchestraWriterUI
+npm install
+npx playwright install chromium   # only needed for the end-to-end tests
+```
+
+You don't need a `.env` file to run locally, because every setting has a local
+default. `.env.example` lists the variables used in production.
 
 ## Run
 
 ```bash
-npm install
-docker compose up -d      # Postgres on localhost:5433, S3Mock on localhost:9090
-npm run dev               # http://localhost:3000 (migrations run on boot)
+docker compose up -d      # Postgres 17 on localhost:5433, S3Mock on localhost:9090
+npm run dev               # http://localhost:3000 (database migrations run on boot)
 ```
 
-No `.env` is needed locally; `.env.example` lists every variable for
-production. Sign up with any email and password (8+ characters), then
-**New project** → drop `fixtures/scores/orchestra-demo.musicxml` and, if you
-want the Sync step, `fixtures/audio/orchestra-demo.mp3`.
+1. Sign up with any email and a password of 8 or more characters.
+2. Click **New project** and drop `fixtures/scores/orchestra-demo.musicxml`.
+   To try the Sync step, also drop `fixtures/audio/orchestra-demo.mp3`.
+3. Step through Sync, Customize and Preview, then export a `.ovproj` project
+   file or an MP4 from the Export page.
 
-Design review without a backend: `NEXT_PUBLIC_API_MOCK=1 npm run dev`.
+MP4 export uses WebCodecs, so use Chrome or Edge. Firefox exports video
+without audio, and we haven't tested Safari yet.
+
+To try the UI without Docker, run `NEXT_PUBLIC_API_MOCK=1 npm run dev`. The
+front end then uses an in-memory mock API.
 
 | Route | Screen |
 |---|---|
-| `/sign-in`, `/sign-up` | accounts (email + password, Google when configured) |
-| `/library`, `/programs`, `/profile`, `/settings` | the director's home |
-| `/projects/<id>/import` → `sync` → `customize` → `preview` → `export` | the workflow; Sync only with a recording |
+| `/sign-in`, `/sign-up` | accounts (email and password; Google when configured) |
+| `/library`, `/programs`, `/profile`, `/settings` | the user's home |
+| `/projects/<id>/import` → `sync` → `customize` → `preview` → `export` | the workflow |
 
-Keyboard on any playback screen: `Space` play/pause, `←`/`→` 5 s (`Shift` 30 s), `M` mute, `Home` start.
+Keyboard shortcuts on any playback screen: `Space` play/pause, `←`/`→` skip
+5 s (`Shift` for 30 s), `M` mute, `Home` jump to the start.
 
-## Checks
+## Test
 
 ```bash
 npm run lint
-npm run typecheck
-npm test              # unit + component tests
-npm run test:api      # API integration tests (needs docker compose)
-npm run test:e2e      # Playwright, Chromium
-npm run build
+npm run typecheck     # next typegen + tsc --noEmit
+npm test              # unit and component tests (Vitest)
+npm run test:api      # API integration tests; needs `docker compose up -d`
+npm run test:e2e      # Playwright end-to-end tests in Chromium; starts the dev server
+npm run build         # production build
 ```
 
-## Where things are
+On every pull request, CI (`.github/workflows/ci.yml`) runs lint, typecheck,
+and the unit, API and end-to-end tests.
 
-- `src/server/` — the API; `docs/backend/README.md` and `API.md`.
-- `src/shared/` — contracts shared by server and browser (info map, project file, sync, API DTOs, MusicXML parser).
-- `src/lib/` — api client, auth, stores, jobs, align, audio, export, visualizer.
-- `src/components/` — `ui` primitives (Radix), `music`, `visualizer`, one folder per screen.
-- `docs/` — spec, decisions (ADRs), plan, research, handoffs. `CLAUDE.md` holds the working rules.
-- `fixtures/` — demo score and recording, parser quirk fixtures (`npm run fixtures` regenerates the generated ones).
+## Project layout
+
+- `src/app/`: Next.js routes, split into the `(auth)`, `(app)` and
+  `(workflow)` groups, plus `api/[[...route]]`, where the server is mounted.
+- `src/server/`: the HTTP API (Hono, Better Auth, Postgres, S3). See
+  `docs/backend/README.md` and `docs/backend/API.md`.
+- `src/shared/`: code and types shared by server and browser, including the
+  MusicXML parser, the information map, the project file, sync and API types.
+- `src/lib/`: browser logic, including the API client, stores, alignment
+  worker, audio engines, MP4 export and the visualizer.
+- `src/components/`: UI components, with one folder per screen and the shared
+  primitives in `ui/`.
+- `tests/`: unit, API and end-to-end tests. Test inputs are in `fixtures/`.
+- `docs/`: the spec, design decisions (`decisions/`), plans, research and
+  handoff notes.
 
 ## Deploying
 
-Push to `main`: `.github/workflows/deploy.yml` builds the Docker image and
-rolls it out on AWS App Runner (one-time setup: `scripts/deploy-init.sh`).
-`ci.yml` runs lint, typecheck, unit, API and e2e tests on every pull request.
+When code is pushed to `main`, `.github/workflows/deploy.yml` builds the Docker
+image and deploys it to AWS App Runner. Before the first deploy, someone has to
+run `scripts/deploy-init.sh` once.
